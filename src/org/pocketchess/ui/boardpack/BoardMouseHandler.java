@@ -1,10 +1,10 @@
 package org.pocketchess.ui.boardpack;
 
-import org.pocketchess.core.game.GameStatus;
+import org.pocketchess.core.game.model.GameStatus;
 import org.pocketchess.core.general.Game;
 import org.pocketchess.core.pieces.Piece;
 import org.pocketchess.core.pieces.Spot;
-import org.pocketchess.ui.gameframepack.GameFrame;
+import org.pocketchess.ui.gameframepack.frame.GameFrame;
 import org.pocketchess.ui.gameframepack.piecesandclock.ImageLoader;
 
 import javax.swing.*;
@@ -32,37 +32,28 @@ public class BoardMouseHandler extends MouseAdapter {
         this.tileSize = tileSize;
     }
 
-    /**
-     * Mouse pressed - start of interaction.
-     */
     @Override
     public void mousePressed(MouseEvent e) {
-        // Only handle left mouse button
         if (!SwingUtilities.isLeftMouseButton(e) || isGameEnded() || game.isAIsTurn()) {
             return;
         }
 
-        // Convert pixel coordinates to logical board coordinates
         int[] logicalCoords = coordHelper.displayToLogical(e.getX() / tileSize, e.getY() / tileSize);
-        if (coordHelper.isValidPosition(logicalCoords[0], logicalCoords[1])) {
+
+        if (coordHelper.isOutOfBounds(logicalCoords[0], logicalCoords[1])) {
             return;
         }
 
-        // Record the piece we clicked on
         boardState.sourceSpot = game.getBoard().getBox(logicalCoords[0], logicalCoords[1]);
         boardState.draggedPiece = boardState.sourceSpot.getPiece();
     }
 
-    /**
-     * Mouse dragged - user is dragging a piece.
-     */
     @Override
     public void mouseDragged(MouseEvent e) {
         if (!SwingUtilities.isLeftMouseButton(e) || boardState.draggedPiece == null) {
             return;
         }
 
-        // Only drag your own pieces during your turn
         if (boardState.draggedPiece.isWhite() == game.isWhiteTurn()) {
             if (!boardState.isDragging) {
                 startDragging();
@@ -74,9 +65,6 @@ public class BoardMouseHandler extends MouseAdapter {
         }
     }
 
-    /**
-     * Mouse released - end of interaction.
-     */
     @Override
     public void mouseReleased(MouseEvent e) {
         if (!SwingUtilities.isLeftMouseButton(e)) {
@@ -98,7 +86,6 @@ public class BoardMouseHandler extends MouseAdapter {
             moveSuccessful = handleClickMove();
         }
 
-        // If move successful, play sound and handle pawn promotion
         if (moveSuccessful) {
             gameFrame.playSoundForLastMove();
             if (game.getStatus() == GameStatus.AWAITING_PROMOTION) {
@@ -110,29 +97,28 @@ public class BoardMouseHandler extends MouseAdapter {
         gameFrame.updateUI();
     }
 
-    /**
-     * Initializes drag mode.
-     */
     private void startDragging() {
         boardState.isDragging = true;
         boardState.selectedSpot = null;
         boardState.dragHighlightSpot = boardState.sourceSpot;
-        boardState.sourceSpot.setPiece(null); // Remove from board
+        boardState.sourceSpot.setPiece(null);
         boardState.draggedPieceImage = ImageLoader.getImageForPiece(boardState.draggedPiece);
     }
 
-    /**
-     * Handles releasing piece after dragging.
-     */
     private boolean handleDragRelease(MouseEvent e) {
         boardState.sourceSpot.setPiece(boardState.draggedPiece);
 
         int[] logicalCoords = coordHelper.displayToLogical(e.getX() / tileSize, e.getY() / tileSize);
-        if (coordHelper.isValidPosition(logicalCoords[0], logicalCoords[1])) {
-            return false; // Dropped outside board
+        if (coordHelper.isOutOfBounds(logicalCoords[0], logicalCoords[1])) {
+            return false;
         }
 
         Spot targetSpot = game.getBoard().getBox(logicalCoords[0], logicalCoords[1]);
+
+        if (targetSpot == boardState.sourceSpot) {
+            return false;
+        }
+
         if (game.isMoveLegal(boardState.sourceSpot, targetSpot)) {
             return game.playerMove(
                     boardState.sourceSpot.getX(),
@@ -144,9 +130,6 @@ public class BoardMouseHandler extends MouseAdapter {
         return false;
     }
 
-    /**
-     * Handles click-to-move interaction.
-     */
     private boolean handleClickMove() {
         if (boardState.sourceSpot == null) {
             return false;
@@ -154,7 +137,6 @@ public class BoardMouseHandler extends MouseAdapter {
 
         Piece clickedPiece = boardState.sourceSpot.getPiece();
 
-        // First click: select piece
         if (boardState.selectedSpot == null) {
             if (clickedPiece != null && clickedPiece.isWhite() == game.isWhiteTurn()) {
                 boardState.selectedSpot = boardState.sourceSpot;
@@ -162,13 +144,11 @@ public class BoardMouseHandler extends MouseAdapter {
             return false;
         }
 
-        // Click on same piece: deselect
         if (boardState.sourceSpot == boardState.selectedSpot) {
             boardState.selectedSpot = null;
             return false;
         }
 
-        // Click on legal destination: execute move
         if (game.isMoveLegal(boardState.selectedSpot, boardState.sourceSpot)) {
             boolean success = game.playerMove(
                     boardState.selectedSpot.getX(),
@@ -180,7 +160,6 @@ public class BoardMouseHandler extends MouseAdapter {
             return success;
         }
 
-        // Click on another piece → switch selection
         if (clickedPiece != null && clickedPiece.isWhite() == game.isWhiteTurn()) {
             boardState.selectedSpot = boardState.sourceSpot;
         } else {
@@ -190,15 +169,11 @@ public class BoardMouseHandler extends MouseAdapter {
         return false;
     }
 
-    /**
-     * Cancels drag if game ended mid-drag.
-     */
     private void cancelDragIfNeeded() {
         if (boardState.isDragging) {
             boardState.sourceSpot.setPiece(boardState.draggedPiece);
         }
     }
-
 
     private void resetBoardState() {
         boardState.isDragging = false;
@@ -207,7 +182,6 @@ public class BoardMouseHandler extends MouseAdapter {
         boardState.sourceSpot = null;
         boardState.dragHighlightSpot = null;
     }
-
 
     private boolean isGameEnded() {
         GameStatus status = game.getStatus();
@@ -220,6 +194,7 @@ public class BoardMouseHandler extends MouseAdapter {
                 status == GameStatus.DRAW_AGREED ||
                 status == GameStatus.WHITE_WINS_BY_RESIGNATION ||
                 status == GameStatus.BLACK_WINS_BY_RESIGNATION ||
+                status == GameStatus.DRAW_INSUFFICIENT_MATERIAL ||
                 status == GameStatus.DRAW_THREEFOLD_REPETITION;
     }
 }

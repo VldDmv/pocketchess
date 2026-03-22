@@ -1,8 +1,8 @@
 package org.pocketchess.core.game.utils;
 
-import org.pocketchess.core.ai.FastMoveGenerator;
-import org.pocketchess.core.game.GameStatus;
-import org.pocketchess.core.game.TimeControl;
+import org.pocketchess.core.ai.search.FastMoveGenerator;
+import org.pocketchess.core.game.model.GameStatus;
+import org.pocketchess.core.game.model.TimeControl;
 import org.pocketchess.core.game.moveanalyze.Move;
 import org.pocketchess.core.general.Game;
 import org.pocketchess.core.pieces.*;
@@ -13,7 +13,7 @@ import java.util.List;
 public class PgnUtils {
 
     public static void loadPgn(Game game, String pgn) {
-        game.resetGame(new TimeControl(10, 0), game.getGameMode(), game.getPlayerColor());
+        game.resetGame(new TimeControl(500000, 0), game.getGameMode(), game.getPlayerColor());
         pgn = pgn.replaceAll("\\[.*?]", "").replaceAll("\\{[^}]*}", "").replaceAll("1-0|0-1|1/2-1/2|\\*", "").trim();
         pgn = pgn.replaceAll("\\d+\\.", "").trim();
         String[] moves = pgn.split("\\s+");
@@ -29,8 +29,7 @@ public class PgnUtils {
                         moveToDo.end.getX(), moveToDo.end.getY(),
                         moveToDo.promotedTo);
             } else {
-                System.err.println("Could not parse move: " + moveSan);
-                break;
+                throw new IllegalArgumentException("Invalid SAN move: " + moveSan);
             }
         }
     }

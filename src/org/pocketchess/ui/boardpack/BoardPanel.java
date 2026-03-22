@@ -1,7 +1,7 @@
 package org.pocketchess.ui.boardpack;
 
 import org.pocketchess.core.general.Game;
-import org.pocketchess.ui.gameframepack.GameFrame;
+import org.pocketchess.ui.gameframepack.frame.GameFrame;
 
 import javax.swing.*;
 import java.awt.*;

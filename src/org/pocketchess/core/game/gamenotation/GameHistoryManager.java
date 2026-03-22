@@ -8,29 +8,27 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Manager of move history and game navigation
+ * Manager of move history and game navigation.
  */
 public class GameHistoryManager {
-    private final Board board;
+    private final Board            board;
     private final GameMoveExecutor moveExecutor;
     private final GamePositionTracker positionTracker;
 
     private final List<Move> fullGameHistory = new ArrayList<>();
-
-
     private int currentMoveIndex = -1;
 
-    public GameHistoryManager(Board board, GameMoveExecutor moveExecutor, GamePositionTracker positionTracker) {
-        this.board = board;
-        this.moveExecutor = moveExecutor;
-        this.positionTracker = positionTracker;
+    public GameHistoryManager(Board board, GameMoveExecutor moveExecutor,
+                              GamePositionTracker positionTracker) {
+        this.board            = board;
+        this.moveExecutor     = moveExecutor;
+        this.positionTracker  = positionTracker;
     }
 
     public void addMove(Move move) {
         fullGameHistory.add(move);
         currentMoveIndex = fullGameHistory.size() - 1;
     }
-
 
     public void removeLastMove() {
         if (!fullGameHistory.isEmpty()) {
@@ -44,7 +42,6 @@ public class GameHistoryManager {
         currentMoveIndex = -1;
     }
 
-
     public Move getLastMove() {
         if (currentMoveIndex >= 0 && currentMoveIndex < fullGameHistory.size()) {
             return fullGameHistory.get(currentMoveIndex);
@@ -52,26 +49,18 @@ public class GameHistoryManager {
         return null;
     }
 
-    public List<Move> getMoveHistory() {
-        return fullGameHistory;
-    }
+    public List<Move> getMoveHistory()   { return fullGameHistory; }
+    public int        getCurrentMoveIndex() { return currentMoveIndex; }
+    public boolean    isLive()           { return currentMoveIndex == fullGameHistory.size() - 1; }
 
-    public int getCurrentMoveIndex() {
-        return currentMoveIndex;
-    }
-
-
-    public boolean isLive() {
-        return currentMoveIndex == fullGameHistory.size() - 1;
-    }
-
-
+    /**
+     * Replays the game up to moveIndex.
+     */
     public void goToMove(int moveIndex) {
-        if (moveIndex < -1 || moveIndex >= fullGameHistory.size()) {
-            return;
-        }
+        if (moveIndex < -1 || moveIndex >= fullGameHistory.size()) return;
 
-        board.resetBoard();
+        // ── Restore to the game's own starting position ───────────────────────
+        board.resetToInitial();
         moveExecutor.clearCapturedPieces();
         positionTracker.reset();
         positionTracker.recordInitialPosition(board);
@@ -87,11 +76,9 @@ public class GameHistoryManager {
         currentMoveIndex = moveIndex;
 
         if (currentMoveIndex >= 0) {
-            Move currentMove = fullGameHistory.get(currentMoveIndex);
-            positionTracker.setHalfMoves(currentMove.halfMovesAfterMove);
+            positionTracker.setHalfMoves(fullGameHistory.get(currentMoveIndex).halfMovesAfterMove);
         } else {
             positionTracker.setHalfMoves(0);
         }
     }
-
 }

@@ -41,9 +41,11 @@ public class BoardCoordinateHelper {
     }
 
     /**
-     * Validates that coordinates are within board bounds.
+     * Renamed to isOutOfBounds with correct semantics:
+     *   returns true  → coordinates are outside the board (0-7 range)
+     *   returns false → coordinates are valid
      */
-    public boolean isValidPosition(int row, int col) {
+    public boolean isOutOfBounds(int row, int col) {
         return row < 0 || row > 7 || col < 0 || col > 7;
     }
 }

@@ -1,18 +1,26 @@
 package org.pocketchess.core.ai.evaluation;
 
-import org.pocketchess.core.ai.FastMoveGenerator;
+import org.pocketchess.core.ai.search.FastMoveGenerator;
 import org.pocketchess.core.ai.difficulty.AIDifficulty;
 import org.pocketchess.core.ai.difficulty.EvaluationParameters;
-import org.pocketchess.core.game.GameStatus;
+import org.pocketchess.core.game.model.GameStatus;
 import org.pocketchess.core.general.Game;
+import org.pocketchess.core.gamemode.LavaManager;
 import org.pocketchess.core.pieces.*;
 
 /**
  * Main evaluator of chess positions.
- * Uses different sets of functions depending on the difficulty level:
- * EASY: only material + positional tables
- * MEDIUM: full evaluation without advanced concepts
- * HARD: all possible factors
+ *
+ * Lava-mode additions:
+ *  - Pieces on WARNING squares receive a heavy penalty  (~80 % of their value)
+ *    because they will be destroyed when lava activates.
+ *  - Enemy pieces on WARNING squares give a corresponding bonus.
+ *  - Pieces somehow still on active LAVA squares are penalised at full value
+ *    (they are effectively dead – in a real game applyLavaEffect already
+ *    removed them, but AI search copies may see them transiently).
+ *
+ * Scale constants are tuned so the AI eagerly moves pieces off warning squares
+ * without over-weighting the lava factor versus normal chess evaluation.
  */
 public class PositionEvaluator {
     private final EvaluationParameters params;
@@ -23,54 +31,78 @@ public class PositionEvaluator {
     private Integer cachedMobilityScore = null;
     private final PieceSquareTables pieceSquareTables;
 
-    public PositionEvaluator(EvaluationParameters params, FastMoveGenerator moveGenerator, AIDifficulty difficulty) {
-        this.params = params;
-        this.moveGenerator = moveGenerator;
-        this.difficulty = difficulty;
-        this.strategicEval = new StrategicEvaluator(params);
-        this.advancedEval = new AdvancedEvaluator(params);
+    // ── Lava evaluation weights ───────────────────────────────────────────────
+
+    /**
+     * Fraction of piece value lost for standing on a WARNING square.
+     *
+     * 100 % – the piece is treated as already dead.
+     *
+     * Why 100 % and not less:
+     *  The AI game copy does NOT simulate lava transitions during search.
+     *  This means the AI cannot "see" that on the exact half-move that
+     *  triggers the lava interval (totalHalfMoves % LAVA_INTERVAL == 0)
+     *  the warning square fires and the piece is destroyed.  Using a
+     *  fraction < 100 % lets the AI profitably capture on warning squares
+     *  right before the interval fires (gain piece, lose only 60-80 %).
+     *  At 100 % the trade is break-even at best, so the AI avoids it.
+     */
+    private static final int WARNING_PENALTY_NUM   = 1;
+    private static final int WARNING_PENALTY_DEN   = 1;
+
+    /**
+     * Fraction of piece value gained for an ENEMY piece on a warning square.
+     * Also 100 % – symmetric with own-piece penalty so that capturing an
+     * enemy piece that is already "condemned" yields zero net gain.
+     */
+    private static final int WARNING_BONUS_NUM     = 1;
+    private static final int WARNING_BONUS_DEN     = 1;
+
+    public PositionEvaluator(EvaluationParameters params,
+                             FastMoveGenerator moveGenerator,
+                             AIDifficulty difficulty) {
+        this.params         = params;
+        this.moveGenerator  = moveGenerator;
+        this.difficulty     = difficulty;
+        this.strategicEval  = new StrategicEvaluator(params);
+        this.advancedEval   = new AdvancedEvaluator(params);
         this.pieceSquareTables = new PieceSquareTables();
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    //  Main evaluation
+    // ─────────────────────────────────────────────────────────────────────────
+
     /**
-     * Main position evaluation function.
-     * Returns the numerical evaluation of the position
-     * +300 = White's advantage is 3 pawns
-     * -9500 = Black's advantage is 95 pawns
-     * ±100000 = checkmate
+     * Returns the numerical evaluation of the position from White's perspective.
+     * +300 = White advantage of 3 pawns, −9500 = Black near-winning, ±100000 = mate.
      */
     public int evaluate(Game game) {
         GameStatus status = game.getStatus();
 
-
-        if (status == GameStatus.WHITE_WIN || status == GameStatus.WHITE_WINS_BY_RESIGNATION) {
+        if (status == GameStatus.WHITE_WIN || status == GameStatus.WHITE_WINS_BY_RESIGNATION)
             return 100000;
-        }
-        if (status == GameStatus.BLACK_WIN || status == GameStatus.BLACK_WINS_BY_RESIGNATION) {
+        if (status == GameStatus.BLACK_WIN || status == GameStatus.BLACK_WINS_BY_RESIGNATION)
             return -100000;
-        }
         if (game.isGameOver()) return 0;
 
-        // EASY: simplified valuation (material + item only)
+        // EASY: simplified valuation (material + piece-square tables only)
         if (difficulty.isSimplifiedEvaluation()) {
-            return getSimplifiedEvaluation(game);
+            int s = getSimplifiedEvaluation(game);
+            if (game.isLavaMode()) s += getLavaAwarenessScore(game);
+            return s;
         }
 
-        // MEDIUM & HARD: полная оценка
+        // MEDIUM & HARD: full evaluation
         int score = 0;
-
-        // Basic components (for all levels above EASY)
         score += getMaterialScore(game);
         score += getPositionalScore(game);
         score += getMobilityScore(game);
-
-
         score += strategicEval.getKingSafetyScore(game);
         score += strategicEval.getStrategicBonuses(game);
         score += strategicEval.getPassedPawnBonus(game);
         score += strategicEval.evaluatePawnStructure(game);
 
-        // Advanced components (HARD only)
         if (difficulty == AIDifficulty.HARD) {
             score += advancedEval.getAdvancedPawnStructureScore(game);
             score += advancedEval.getCenterControlScore(game);
@@ -84,157 +116,163 @@ public class PositionEvaluator {
             score += advancedEval.getCenterControlScore(game) / 3;
         }
 
-        return score;
-    }
-
-    /**
-     * Simplified assessment for EASY level
-     */
-    private int getSimplifiedEvaluation(Game game) {
-        int score = 0;
-        boolean isEndGame = isEndGame(game);
-
-        for (int r = 0; r < 8; r++) {
-            for (int c = 0; c < 8; c++) {
-                Piece piece = game.getBoard().getBox(r, c).getPiece();
-                if (piece != null) {
-                    int pieceValue = getPieceValue(piece);
-                    int positionalValue = pieceSquareTables.getScore(piece, r, c, isEndGame);
-
-                    if (piece.isWhite()) {
-                        score += pieceValue + positionalValue;
-                    } else {
-                        score -= pieceValue + positionalValue;
-                    }
-                }
-            }
+        // ── Lava awareness (all non-EASY levels) ────────────────────────────
+        if (game.isLavaMode()) {
+            score += getLavaAwarenessScore(game);
         }
 
         return score;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    //  Lava evaluation
+    // ─────────────────────────────────────────────────────────────────────────
+
     /**
-     * Calculates material balance
+     * Evaluates lava-specific positional factors.
+     * Warning squares (blue) – will become lava on the next interval:
+     * Own piece on warning  → penalty  ≈ −80 % of piece value
+     * Enemy piece on warning → bonus    ≈ +60 % of piece value
+     * Active lava squares (red) – in a real game the piece is already
+     * removed; in AI search copies it may still be present transiently:
+     Any piece on active lava → full piece-value penalty/bonus
+     * Kings are ignored (they trigger game-end logic elsewhere).
      */
+    private int getLavaAwarenessScore(Game game) {
+        LavaManager lm = game.getLavaManager();
+        if (!lm.isEnabled()) return 0;
+
+        int score = 0;
+
+        // ── Warning squares ──────────────────────────────────────────────────
+        for (int encoded : lm.getWarningSquares()) {
+            int[] pos   = LavaManager.decode(encoded);
+            Piece piece = game.getBoard().getBox(pos[0], pos[1]).getPiece();
+            if (piece == null || piece instanceof King) continue;
+
+            int val = getPieceValue(piece);
+
+            if (piece.isWhite()) {
+                // White piece in danger → bad for White
+                score -= val * WARNING_PENALTY_NUM / WARNING_PENALTY_DEN;
+            } else {
+                // Black piece in danger → good for White
+                score += val * WARNING_BONUS_NUM / WARNING_BONUS_DEN;
+            }
+        }
+
+        // ── Active lava squares ──────────────────────────────────────────────
+        // Normally empty after applyLavaEffect; guard against AI-copy edge cases.
+        for (int encoded : lm.getLavaSquares()) {
+            int[] pos   = LavaManager.decode(encoded);
+            Piece piece = game.getBoard().getBox(pos[0], pos[1]).getPiece();
+            if (piece == null || piece instanceof King) continue;
+
+            int val = getPieceValue(piece);
+            // Full value – the piece is as good as dead
+            score += piece.isWhite() ? -val : val;
+        }
+
+        return score;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    //  Standard evaluation helpers (unchanged)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private int getSimplifiedEvaluation(Game game) {
+        int score = 0;
+        boolean isEndGame = isEndGame(game);
+        for (int r = 0; r < 8; r++) {
+            for (int c = 0; c < 8; c++) {
+                Piece piece = game.getBoard().getBox(r, c).getPiece();
+                if (piece != null) {
+                    int pieceValue     = getPieceValue(piece);
+                    int positionalValue = pieceSquareTables.getScore(piece, r, c, isEndGame);
+                    if (piece.isWhite()) score += pieceValue + positionalValue;
+                    else                 score -= pieceValue + positionalValue;
+                }
+            }
+        }
+        return score;
+    }
+
     private int getMaterialScore(Game game) {
         int score = 0;
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
                 Piece piece = game.getBoard().getBox(r, c).getPiece();
                 if (piece != null) {
-                    if (piece.isWhite()) {
-                        score += getPieceValue(piece);
-                    } else {
-                        score -= getPieceValue(piece);
-                    }
+                    if (piece.isWhite()) score += getPieceValue(piece);
+                    else                 score -= getPieceValue(piece);
                 }
             }
         }
         return score;
     }
 
-    /**
-     * Returns the contempt score - the draw score.
-     * The contempt factor forces the AI to play for a win when ahead,
-     * and to settle for a draw when the position is bad
-     */
     public int getContemptScore(Game game) {
         int materialScore = getMaterialScore(game);
-        int perspective = game.isWhiteTurn() ? 1 : -1;
-        int contempt = (materialScore * perspective) / 5;
+        int perspective   = game.isWhiteTurn() ? 1 : -1;
+        int contempt      = (materialScore * perspective) / 5;
         return Math.max(-params.pawnValue, Math.min(params.pawnValue, contempt));
     }
 
-    /**
-     * Evaluates the positional placement of pieces.
-     * Uses piece-square tables - tables that show
-     * how well a piece fits on each square.
-     */
     private int getPositionalScore(Game game) {
         int score = 0;
         boolean isEndGame = isEndGame(game);
-
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
                 Piece piece = game.getBoard().getBox(r, c).getPiece();
                 if (piece != null) {
-                    if (piece.isWhite()) {
-                        score += pieceSquareTables.getScore(piece, r, c, isEndGame);
-                    } else {
-                        score -= pieceSquareTables.getScore(piece, r, c, isEndGame);
-                    }
+                    if (piece.isWhite()) score += pieceSquareTables.getScore(piece, r, c, isEndGame);
+                    else                 score -= pieceSquareTables.getScore(piece, r, c, isEndGame);
                 }
             }
         }
         return score;
     }
 
-    /**
-     * Evaluates mobility (number of available moves).
-     */
     private int getMobilityScore(Game game) {
         if (cachedMobilityScore != null) return cachedMobilityScore;
 
-
         int currentPlayerMoves = moveGenerator.generateMoves(game).size();
-
         game.makeNullMove();
         int opponentMoves = moveGenerator.generateMoves(game).size();
         game.undoNullMove();
 
         int mobilityScore = currentPlayerMoves - opponentMoves;
-
-        if (!game.isWhiteTurn()) {
-            mobilityScore = -mobilityScore;
-        }
+        if (!game.isWhiteTurn()) mobilityScore = -mobilityScore;
 
         cachedMobilityScore = params.mobilityWeight * mobilityScore;
         return cachedMobilityScore;
     }
 
-    /**
-     * Determines the phase of the game (mid-game or endgame).
-     * The endgame occurs if:
-     * - There are no queens on the board
-     * - OR the total piece value is < 4000
-     * In the endgame, priorities change: the king becomes active,
-     * Passed pawns are critical.
-     */
     private boolean isEndGame(Game game) {
         int totalMaterial = 0;
-        int queenCount = 0;
-
+        int queenCount    = 0;
         for (int r = 0; r < 8; r++) {
             for (int c = 0; c < 8; c++) {
                 Piece p = game.getBoard().getBox(r, c).getPiece();
                 if (p != null && !(p instanceof King)) {
                     totalMaterial += getPieceValue(p);
-                    if (p instanceof Queen) {
-                        queenCount++;
-                    }
+                    if (p instanceof Queen) queenCount++;
                 }
             }
         }
-
         return queenCount == 0 || totalMaterial < 4000;
     }
 
-    /**
-     Returns the cost of the shape from the parameters
-     */
     public int getPieceValue(Piece piece) {
-        if (piece instanceof Pawn) return params.pawnValue;
+        if (piece instanceof Pawn)   return params.pawnValue;
         if (piece instanceof Knight) return params.knightValue;
         if (piece instanceof Bishop) return params.bishopValue;
-        if (piece instanceof Rook) return params.rookValue;
-        if (piece instanceof Queen) return params.queenValue;
-        if (piece instanceof King) return 20000;
+        if (piece instanceof Rook)   return params.rookValue;
+        if (piece instanceof Queen)  return params.queenValue;
+        if (piece instanceof King)   return 20000;
         return 0;
     }
 
-    /**
-     * Clears the mobility cache.
-     */
     public void clearCache() {
         cachedMobilityScore = null;
     }

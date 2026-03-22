@@ -1,8 +1,8 @@
 package org.pocketchess.core.ai.evaluation;
 
-import org.pocketchess.core.ai.FastMoveGenerator;
-import org.pocketchess.core.ai.MoveOrderer;
-import org.pocketchess.core.ai.TranspositionTable;
+import org.pocketchess.core.ai.search.FastMoveGenerator;
+import org.pocketchess.core.ai.search.MoveOrderer;
+import org.pocketchess.core.ai.search.TranspositionTable;
 import org.pocketchess.core.ai.difficulty.AIDifficulty;
 import org.pocketchess.core.game.moveanalyze.Move;
 import org.pocketchess.core.general.Game;

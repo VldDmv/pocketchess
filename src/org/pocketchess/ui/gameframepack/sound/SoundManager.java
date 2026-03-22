@@ -10,16 +10,14 @@ import java.io.InputStream;
  * Low-level sound manager that loads and plays audio clips.
  */
 public class SoundManager {
-    // Sound clips for different game events
     private static final Clip moveSound;
     private static final Clip captureSound;
     private static final Clip checkSound;
     private static final Clip castleSound;
-    private static final Clip promotionSound;  // Pawn promotion
-    private static final Clip startSound;      // Game start
+    private static final Clip promotionSound;
+    private static final Clip startSound;
     private static final Clip checkmateSound;
-    private static final Clip drawSound;       // Draw/Stalemate
-
+    private static final Clip drawSound;
 
     static {
         moveSound = loadSound("/sounds/move.wav");
@@ -32,42 +30,25 @@ public class SoundManager {
         drawSound = loadSound("/sounds/draw.wav");
     }
 
-    /**
-     * Loads a sound file from resources into a Clip.
-     */
     private static Clip loadSound(String path) {
         try {
-            // Get the file from resources
             InputStream is = SoundManager.class.getResourceAsStream(path);
-            if (is == null) {
-                System.err.println("Could not find sound file: " + path);
-                return null;
-            }
+            if (is == null) return null;
 
-            // Buffer the input for better performance
-            BufferedInputStream bis = new BufferedInputStream(is);
-
-            // Decode the WAV file
-            AudioInputStream audioStream = AudioSystem.getAudioInputStream(bis);
-
-            // Create and open a Clip (reusable audio player)
+            AudioInputStream audioStream = AudioSystem.getAudioInputStream(
+                    new BufferedInputStream(is));
             Clip clip = AudioSystem.getClip();
             clip.open(audioStream);
-
             return clip;
         } catch (Exception e) {
-            System.err.println("Error loading sound: " + path);
             return null;
         }
     }
 
-    /**
-     * Plays a sound clip.
-     */
     private static void play(Clip clip) {
         if (clip != null) {
-            clip.setFramePosition(0);  // Rewind to start
-            clip.start();               // Begin playback
+            clip.setFramePosition(0);
+            clip.start();
         }
     }
 

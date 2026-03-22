@@ -1,8 +1,8 @@
 package org.pocketchess.core.game.status;
 
 import org.pocketchess.core.ai.difficulty.AIDifficulty;
-import org.pocketchess.core.game.GameMode;
-import org.pocketchess.core.game.GameStatus;
+import org.pocketchess.core.game.model.GameMode;
+import org.pocketchess.core.game.model.GameStatus;
 import org.pocketchess.core.pieces.Piece;
 import org.pocketchess.core.pieces.Spot;
 
@@ -18,7 +18,7 @@ import org.pocketchess.core.pieces.Spot;
  * - Proposed draw flag
  */
 public class GameStateManager {
-    public boolean isWhiteTurn = true;
+    private boolean isWhiteTurn = true;
     private GameMode gameMode = GameMode.PVP;
     private Piece.Color playerColor = Piece.Color.WHITE;
     private AIDifficulty aiDifficulty = AIDifficulty.MEDIUM;

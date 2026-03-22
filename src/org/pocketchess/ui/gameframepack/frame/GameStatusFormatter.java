@@ -1,4 +1,4 @@
-package org.pocketchess.ui.gameframepack;
+package org.pocketchess.ui.gameframepack.frame;
 
 import org.pocketchess.core.general.Game;
 

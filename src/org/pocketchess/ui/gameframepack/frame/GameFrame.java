@@ -1,8 +1,10 @@
-package org.pocketchess.ui.gameframepack;
+package org.pocketchess.ui.gameframepack.frame;
 
-import org.pocketchess.core.game.GameMode;
+import org.pocketchess.core.game.model.GameMode;
 import org.pocketchess.core.game.gamenotation.NotationProvider;
+import org.pocketchess.core.game.moveanalyze.AICallback;
 import org.pocketchess.core.game.moveanalyze.Move;
+import org.pocketchess.core.game.moveanalyze.SoundEventCallback;
 import org.pocketchess.core.general.Game;
 import org.pocketchess.ui.boardpack.BoardPanel;
 import org.pocketchess.ui.gameframepack.notation.ChessNotationFormatter;
@@ -10,31 +12,28 @@ import org.pocketchess.ui.gameframepack.notation.MoveHistoryManager;
 import org.pocketchess.ui.gameframepack.notation.PgnManager;
 import org.pocketchess.ui.gameframepack.piecesandclock.PlayerPanelManager;
 import org.pocketchess.ui.gameframepack.sound.GameSoundManager;
+import org.pocketchess.ui.gameframepack.sound.SoundManager;
 
 import javax.swing.*;
 import java.awt.*;
 
 /**
- * Main game window - coordinates all UI components and managers.
- * MANAGERS:
- * - PlayerPanelManager: Manages player panels (clocks, captured pieces)
- * - MoveHistoryManager: Manages move history display and navigation
- * - GameDialogManager: Handles all user dialogs (new game, resign, etc.)
- * - PgnManager: Handles PGN import/export
- * - GameActionHandler: Processes game actions (undo, draw, resign)
- * - GameSoundManager: Plays appropriate sounds for game events
+ * Main game window.
+ *
+ * Implements {@link SoundEventCallback} and passes itself to
+ * {@link Game#setSoundCallback(SoundEventCallback)}, keeping all sound
+ * playback in the UI layer with no core→ui dependency.
  */
-public class GameFrame extends JFrame implements NotationProvider, GameFrameController {
-    // Game logic
+public class GameFrame extends JFrame
+        implements NotationProvider, GameFrameController, AICallback, SoundEventCallback {
+
     private final Game game;
 
-    // UI components
     private final BoardPanel boardPanel;
     private final JLabel statusLabel;
     private final JPanel westPanel;
     private final JPanel actionsPanel;
 
-    // Managers
     private final PlayerPanelManager playerPanelManager;
     private final MoveHistoryManager moveHistoryManager;
     private final GameDialogManager dialogManager;
@@ -43,23 +42,22 @@ public class GameFrame extends JFrame implements NotationProvider, GameFrameCont
     private final ChessNotationFormatter notationFormatter;
     private final GameSoundManager soundManager;
 
-    // State
     private boolean isBoardFlipped = false;
 
     public GameFrame() {
         this.game = new Game();
-        this.game.setGameFrame(this);
 
-        // Initialize helper managers
-        this.dialogManager = new GameDialogManager(this);
-        this.notationFormatter = new ChessNotationFormatter(game);
-        this.pgnManager = new PgnManager(game, this);
-        this.soundManager = new GameSoundManager(game);
+        game.setSoundCallback(this);
+        game.setCallback(this);
 
-        // Create UI components
-        this.statusLabel = GameFrameLayoutBuilder.createStatusLabel();
-        this.boardPanel = new BoardPanel(this);
-        this.westPanel = GameFrameLayoutBuilder.createWestPanel();
+        this.dialogManager      = new GameDialogManager(this);
+        this.notationFormatter  = new ChessNotationFormatter(game);
+        this.pgnManager         = new PgnManager(game, this);
+        this.soundManager       = new GameSoundManager(game);
+
+        this.statusLabel  = GameFrameLayoutBuilder.createStatusLabel();
+        this.boardPanel   = new BoardPanel(this);
+        this.westPanel    = GameFrameLayoutBuilder.createWestPanel();
         this.actionsPanel = GameFrameLayoutBuilder.createActionsPanel(
                 this::handleUndo,
                 this::handleFlipBoard,
@@ -67,23 +65,18 @@ public class GameFrame extends JFrame implements NotationProvider, GameFrameCont
                 this::handleResign
         );
 
-        // Create managers that depend on UI
         this.playerPanelManager = new PlayerPanelManager(westPanel, actionsPanel);
         this.moveHistoryManager = new MoveHistoryManager(game, this, this::updateUI);
         this.actionHandler = new GameActionHandler(
                 game, dialogManager, pgnManager, this::updateUI, this, soundManager
         );
 
-        // Setup and start
         setupFrame();
         layoutComponents();
         game.setupTimer(this::updateClocks);
         actionHandler.handleNewGame();
     }
 
-    /**
-     * Configures frame properties.
-     */
     private void setupFrame() {
         setTitle("Chesso");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -91,9 +84,6 @@ public class GameFrame extends JFrame implements NotationProvider, GameFrameCont
         setLayout(new BorderLayout(10, 0));
     }
 
-    /**
-     * Arranges all components in the frame.
-     */
     private void layoutComponents() {
         JPanel topPanel = GameFrameLayoutBuilder.createTopPanel(
                 statusLabel,
@@ -112,29 +102,15 @@ public class GameFrame extends JFrame implements NotationProvider, GameFrameCont
         setVisible(true);
     }
 
-    // ========== ACTION HANDLERS ==========
+    // ── Action handlers ───────────────────────────────────────────────────────
 
-    private void handleUndo() {
-        actionHandler.handleUndo();
-    }
+    private void handleUndo()       { actionHandler.handleUndo(); }
+    private void handleFlipBoard()  { setBoardFlipped(!isBoardFlipped); }
+    private void handleDrawOffer()  { actionHandler.handleDrawOffer(); }
+    private void handleResign()     { actionHandler.handleResign(); }
 
-    private void handleFlipBoard() {
-        setBoardFlipped(!isBoardFlipped);
-    }
+    // ── UI updates ────────────────────────────────────────────────────────────
 
-    private void handleDrawOffer() {
-        actionHandler.handleDrawOffer();
-    }
-
-    private void handleResign() {
-        actionHandler.handleResign();
-    }
-
-    // ========== UI UPDATES ==========
-
-    /**
-     * Master update method - refreshes all UI components.
-     */
     public void updateUI() {
         playerPanelManager.updateCapturedPieces(
                 game.getWhiteCapturedPieces(),
@@ -155,23 +131,13 @@ public class GameFrame extends JFrame implements NotationProvider, GameFrameCont
         );
     }
 
-    /**
-     * Updates status label and draw button text.
-     */
     private void updateStatus() {
         String statusText = GameStatusFormatter.formatStatus(game);
         statusLabel.setText(statusText);
-
         GameFrameLayoutBuilder.updateDrawButton(
-                actionsPanel,
-                game.isDrawOffered(),
-                game.isGameOver()
-        );
+                actionsPanel, game.isDrawOffered(), game.isGameOver());
     }
 
-    /**
-     * Enables/disables buttons based on game state.
-     */
     private void updateButtonStates() {
         GameFrameLayoutBuilder.updateButtonStates(
                 actionsPanel,
@@ -182,7 +148,6 @@ public class GameFrame extends JFrame implements NotationProvider, GameFrameCont
         );
     }
 
-
     @Override
     public void setBoardFlipped(boolean flipped) {
         this.isBoardFlipped = flipped;
@@ -190,26 +155,43 @@ public class GameFrame extends JFrame implements NotationProvider, GameFrameCont
         playerPanelManager.updatePlayerPanels(flipped, game.getTimeControl());
     }
 
-    // ========== NOTATION DELEGATION ==========
+    @Override
+    public void onAIMoveCompleted(boolean moveSuccessful) { updateUI(); }
+
+    // ── SoundEventCallback implementation ─────────────────────────────────────
+
+    @Override
+    public void onCapture()    { SoundManager.playCaptureSound(); }
+
+    @Override
+    public void onCheckmate()  { SoundManager.playCheckmateSound(); }
+
+    @Override
+    public void onDraw()       { SoundManager.playDrawSound(); }
+
+    @Override
+    public void onPromotion()  { SoundManager.playPromotionSound(); }
+
+    @Override
+    public void onGameStart()  { SoundManager.playStartSound(); }
+
+    // ── NotationProvider ──────────────────────────────────────────────────────
 
     @Override
     public String getNotationForMove(Move move) {
         return notationFormatter.getNotationForMove(move);
     }
 
-    // ========== SOUNDS ==========
+    // ── AICallback sound ──────────────────────────────────────────────────────
 
-    public void playSoundForLastMove() {
-        soundManager.playSoundForLastMove();
-    }
+    @Override
+    public void playSoundForLastMove() { soundManager.playSoundForLastMove(); }
 
-    // ========== GETTERS ==========
+    // ── Getters ───────────────────────────────────────────────────────────────
 
-    public Game getGame() {
-        return game;
-    }
+    public Game getGame() { return game; }
 
-    // ========== MAIN ==========
+    // ── Main ──────────────────────────────────────────────────────────────────
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(GameFrame::new);

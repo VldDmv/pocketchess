@@ -1,6 +1,6 @@
 package org.pocketchess.core.game.moveanalyze;
 
-import org.pocketchess.core.game.GameStatus;
+import org.pocketchess.core.game.model.GameStatus;
 import org.pocketchess.core.game.gamenotation.GameHistoryManager;
 import org.pocketchess.core.game.gamenotation.GamePositionTracker;
 import org.pocketchess.core.game.status.GameMoveExecutor;
@@ -11,7 +11,7 @@ import org.pocketchess.core.pieces.King;
 import org.pocketchess.core.pieces.Pawn;
 import org.pocketchess.core.pieces.Piece;
 import org.pocketchess.core.pieces.Spot;
-
+import org.pocketchess.core.pieces.Rook;
 import java.util.List;
 
 /**
@@ -58,37 +58,40 @@ public class PlayerMoveService {
      */
     public boolean executeMove(int startX, int startY, int endX, int endY) {
 
-        if (stateManager.isGameOver()) {
-            return false;
-        }
-
-        if (!historyManager.isLive()) {
-            return false;
-        }
+        if (stateManager.isGameOver() || !historyManager.isLive()) return false;
 
         stateManager.setDrawOffered(false);
-
-        if (historyManager.getMoveHistory().isEmpty()) {
-            timeManager.startTimer();
-        }
-
-
-
-
+        if (historyManager.getMoveHistory().isEmpty()) timeManager.startTimer();
 
         Spot startSpot = board.getBox(startX, startY);
         Spot endSpot = board.getBox(endX, endY);
         Piece sourcePiece = startSpot.getPiece();
 
-        if (!isValidPiece(sourcePiece)) {
-            return false;
+        if (!isValidPiece(sourcePiece)) return false;
+
+        boolean isCastling = false;
+        if (sourcePiece instanceof King && !((King) sourcePiece).hasMoved()) {
+            Piece targetPiece = endSpot.getPiece();
+
+            // 1. The player set the king onto his own unmoved rook (UI for Chess960)
+            if (targetPiece instanceof Rook && targetPiece.isWhite() == sourcePiece.isWhite()) {
+                isCastling = true;
+                int direction = (endY > startY) ? 1 : -1;
+                endY = (direction > 0) ? 6 : 2;
+                endSpot = board.getBox(endX, endY);
+            }
+            // 2. The player set the king on the g- or c-file
+            // Only treat as castling if king moves MORE than 1 square.
+            // This prevents a king on d1 moving one step to c1 from being
+            // misidentified as queenside castling.
+            else if ((endY == 6 || endY == 2) && Math.abs(endY - startY) > 1) {
+                if (ruleEngine.isCastlingMoveLegal(board, startSpot, endSpot)) {
+                    isCastling = true;
+                }
+            }
         }
 
-        boolean isCastling = (sourcePiece instanceof King) && Math.abs(endY - startY) == 2;
-        if (!isMoveLegal(startSpot, endSpot, isCastling)) {
-            return false;
-        }
-
+        if (!isMoveLegal(startSpot, endSpot, isCastling)) return false;
 
         Move move = moveExecutor.createAndExecuteMove(
                 startSpot, endSpot, isCastling, positionTracker.getHalfMoves()

@@ -1,8 +1,7 @@
 package org.pocketchess.core.game.status;
 
-import org.pocketchess.core.game.GameStatus;
-import org.pocketchess.core.game.TimeControl;
-import org.pocketchess.ui.gameframepack.sound.SoundManager;
+import org.pocketchess.core.game.model.GameStatus;
+import org.pocketchess.core.game.model.TimeControl;
 
 import javax.swing.*;
 
@@ -69,11 +68,9 @@ public class GameTimeManager {
 
                 if (whiteTimeMillis == 0) {
                     statusCallback.onTimeExpired(true);
-                    SoundManager.playCheckmateSound();
                     timer.stop();
                 } else if (blackTimeMillis == 0) {
                     statusCallback.onTimeExpired(false);
-                    SoundManager.playCheckmateSound();
                     timer.stop();
                 }
 

@@ -1,6 +1,6 @@
 package org.pocketchess.ui.gameframepack.notation;
 
-import org.pocketchess.core.game.GameMode;
+import org.pocketchess.core.game.model.GameMode;
 import org.pocketchess.core.general.Game;
 import org.pocketchess.core.game.moveanalyze.Move;
 import org.pocketchess.core.game.gamenotation.NotationProvider;

@@ -8,6 +8,46 @@ public final class FenUtils {
     }
 
     /**
+     * Appends castling rights for one side.
+     * Works for both Classic (king on e-file) and Chess960 (king anywhere).
+     * Uses uppercase letters for White (K/Q), lowercase for Black (k/q).
+     */
+    private static void appendCastlingRights(Board board, StringBuilder sb, boolean isWhite) {
+        int rank = isWhite ? 7 : 0;
+
+        // Find the unmoved king on this rank
+        int kingCol = -1;
+        for (int c = 0; c < 8; c++) {
+            Piece p = board.getBox(rank, c).getPiece();
+            if (p instanceof King && p.isWhite() == isWhite && !((King) p).hasMoved()) {
+                kingCol = c;
+                break;
+            }
+        }
+        if (kingCol == -1) return; // King has moved — no castling rights
+
+        // Kingside: scan right of king for unmoved rook
+        for (int c = kingCol + 1; c < 8; c++) {
+            Piece p = board.getBox(rank, c).getPiece();
+            if (p instanceof Rook && p.isWhite() == isWhite && !((Rook) p).hasMoved()) {
+                sb.append(isWhite ? 'K' : 'k');
+                break;
+            }
+            if (p != null) break;
+        }
+
+        // Queenside: scan left of king for unmoved rook
+        for (int c = kingCol - 1; c >= 0; c--) {
+            Piece p = board.getBox(rank, c).getPiece();
+            if (p instanceof Rook && p.isWhite() == isWhite && !((Rook) p).hasMoved()) {
+                sb.append(isWhite ? 'Q' : 'q');
+                break;
+            }
+            if (p != null) break;
+        }
+    }
+
+    /**
      * Generates a FEN string from the current position.
      * Used for:
      * - Tracking position repetitions
@@ -42,25 +82,13 @@ public final class FenUtils {
 
         fen.append(isWhiteTurn ? " w " : " b ");
 
+        // Castling rights — scan dynamically so Chess960 works correctly.
+        // Classic:  king must be on e-file (col 4); rooks on a/h-files.
+        // Chess960: king can be anywhere; rooks wherever they started.
         StringBuilder castlingRights = new StringBuilder();
 
-        // White
-        Piece whiteKing = board.getBox(7, 4).getPiece();
-        if (whiteKing instanceof King && !((King) whiteKing).hasMoved()) {
-            Piece kingRook = board.getBox(7, 7).getPiece();
-            if (kingRook instanceof Rook && !((Rook) kingRook).hasMoved()) castlingRights.append("K");
-            Piece queenRook = board.getBox(7, 0).getPiece();
-            if (queenRook instanceof Rook && !((Rook) queenRook).hasMoved()) castlingRights.append("Q");
-        }
-
-        // Black
-        Piece blackKing = board.getBox(0, 4).getPiece();
-        if (blackKing instanceof King && !((King) blackKing).hasMoved()) {
-            Piece kingRook = board.getBox(0, 7).getPiece();
-            if (kingRook instanceof Rook && !((Rook) kingRook).hasMoved()) castlingRights.append("k");
-            Piece queenRook = board.getBox(0, 0).getPiece();
-            if (queenRook instanceof Rook && !((Rook) queenRook).hasMoved()) castlingRights.append("q");
-        }
+        appendCastlingRights(board, castlingRights, true);   // White
+        appendCastlingRights(board, castlingRights, false);  // Black
 
         if (castlingRights.isEmpty()) {
             fen.append("- ");

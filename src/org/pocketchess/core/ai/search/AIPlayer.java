@@ -1,4 +1,4 @@
-package org.pocketchess.core.ai;
+package org.pocketchess.core.ai.search;
 
 import org.pocketchess.core.ai.difficulty.AIDifficulty;
 import org.pocketchess.core.ai.difficulty.EvaluationParameters;
@@ -7,9 +7,11 @@ import org.pocketchess.core.ai.evaluation.IterativeDeepeningSearch;
 import org.pocketchess.core.ai.evaluation.NegamaxEngine;
 import org.pocketchess.core.ai.evaluation.PositionEvaluator;
 import org.pocketchess.core.ai.evaluation.QuiescenceSearch;
+import org.pocketchess.core.ai.opening.OpeningBookManager;
 import org.pocketchess.core.game.moveanalyze.Move;
 import org.pocketchess.core.general.Game;
 
+import java.sql.SQLOutput;
 import java.util.Random;
 
 /**
@@ -99,7 +101,9 @@ public class AIPlayer {
             bestMove = mistakeGenerator.makeDeliberateMistake(gameCopy, bestMove);
         }
 
-        assert bestMove != null : "No legal moves found!";
+        if (bestMove ==null) {
+            throw new IllegalStateException("No legal moves found in a position");
+        }
         return convertMoveToOriginalGame(bestMove, game);
     }
 

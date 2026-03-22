@@ -1,6 +1,6 @@
 package org.pocketchess.core.game.moveanalyze;
 
-import org.pocketchess.core.game.GameStatus;
+import org.pocketchess.core.game.model.GameStatus;
 import org.pocketchess.core.pieces.Piece;
 import org.pocketchess.core.pieces.Spot;
 
@@ -18,23 +18,32 @@ public class Move {
     public long blackTimeMillisAfterMove;
     public GameStatus statusAfterMove;
 
+    /**
+     * For Chess960 castling: the column the rook was on BEFORE the castle.
+     * In standard chess the rook is always at col 0 or col 7, so this field
+     * is ignored.  In Chess960 the rook may be anywhere, and we need the
+     * original column to undo a temporary castling move correctly.
+     * -1 means "not set / standard chess position".
+     */
+    public int chess960RookFromCol = -1;
+
     public Move() {
         this.statusAfterMove = GameStatus.ACTIVE;
     }
 
-    public Move(Spot start, Spot end, Piece pieceMoved, Piece pieceKilled, boolean wasCastling, boolean wasFirstMove,
+    public Move(Spot start, Spot end, Piece pieceMoved, Piece pieceKilled,
+                boolean wasCastling, boolean wasFirstMove,
                 Spot enPassant, int halfMoves, long whiteTime, long blackTime) {
-        this.start = start;
-        this.end = end;
-        this.pieceMoved = pieceMoved;
-        this.pieceKilled = pieceKilled;
-        this.wasCastlingMove = wasCastling;
+        this.start                = start;
+        this.end                  = end;
+        this.pieceMoved           = pieceMoved;
+        this.pieceKilled          = pieceKilled;
+        this.wasCastlingMove      = wasCastling;
         this.wasFirstMoveForPiece = wasFirstMove;
         this.enPassantTargetBeforeMove = enPassant;
-        this.halfMovesAfterMove = halfMoves;
+        this.halfMovesAfterMove   = halfMoves;
         this.whiteTimeMillisAfterMove = whiteTime;
         this.blackTimeMillisAfterMove = blackTime;
-        this.statusAfterMove = GameStatus.ACTIVE;
+        this.statusAfterMove      = GameStatus.ACTIVE;
     }
 }
-

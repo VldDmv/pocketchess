@@ -1,6 +1,6 @@
 package org.pocketchess.core.ai.difficulty;
 
-import org.pocketchess.core.ai.FastMoveGenerator;
+import org.pocketchess.core.ai.search.FastMoveGenerator;
 import org.pocketchess.core.ai.evaluation.NegamaxEngine;
 import org.pocketchess.core.game.moveanalyze.Move;
 import org.pocketchess.core.general.Game;

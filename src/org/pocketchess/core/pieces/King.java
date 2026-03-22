@@ -3,8 +3,6 @@ package org.pocketchess.core.pieces;
 import org.pocketchess.core.general.Board;
 
 public class King extends Piece {
-    private static final int KINGSIDE_ROOK_Y = 7;
-    private static final int QUEENSIDE_ROOK_Y = 0;
     private boolean hasMoved = false;
 
     public King(boolean isWhite) {
@@ -16,69 +14,63 @@ public class King extends Piece {
         this.hasMoved = hasMoved;
     }
 
-    public boolean hasMoved() {
-        return hasMoved;
-    }
+    public boolean hasMoved() { return hasMoved; }
 
-    public void setHasMoved(boolean hasMoved) {
-        this.hasMoved = hasMoved;
-    }
-
+    public void setHasMoved(boolean hasMoved) { this.hasMoved = hasMoved; }
     @Override
     public boolean canMove(Board board, Spot start, Spot end) {
-        // Cannot move to a square with a piece of the same color
-        if (end.getPiece() != null && end.getPiece().isWhite() == this.isWhite()) {
-            return false;
-        }
-
         int x = Math.abs(start.getX() - end.getX());
         int y = Math.abs(start.getY() - end.getY());
 
-        // Normal king move (one square)
-        if (x <= 1 && y <= 1) {
-            return true;
+        // ── Castling ──────────────────────────────────────────────────────────
+        boolean isCastlingIntent = (x == 0) && !this.hasMoved() &&
+                (end.getY() == 6 || end.getY() == 2 ||
+                        (end.getPiece() instanceof Rook && end.getPiece().isWhite() == this.isWhite()));
+
+        if (isCastlingIntent) {
+            return isCastlingMove(board, start, end);
         }
 
-        // Castling logic (king moves 2 squares horizontally)
-        return isCastlingMove(board, start, end);
+        // ── Normal one-square move ────────────────────────────────────────────
+        if (x <= 1 && y <= 1) {
+            if (end.getPiece() != null && end.getPiece().isWhite() == this.isWhite()) return false;
+            return true;
+        }
+        return false;
     }
 
     private boolean isCastlingMove(Board board, Spot start, Spot end) {
-        // Castling is only possible if the king hasn't moved
-        if (this.hasMoved) {
-            return false;
-        }
+        if (this.hasMoved) return false;
 
-        int dx = end.getX() - start.getX();
-        int dy = end.getY() - start.getY();
+        int direction = (end.getY() > start.getY()) ? 1 : -1;
+        int kingDest = (direction > 0) ? 6 : 2;
 
-        // Castling is a horizontal move of 2 squares
-        if (dx == 0 && Math.abs(dy) == 2) {
-            // Determine which side to castle
-            Spot rookSpot;
-            if (dy > 0) { // Right (kingside castling)
-                rookSpot = board.getBox(start.getX(), KINGSIDE_ROOK_Y);
-            } else { // Left (queenside castling)
-                rookSpot = board.getBox(start.getX(), QUEENSIDE_ROOK_Y);
-            }
+        for (int c = start.getY() + direction; c >= 0 && c < 8; c += direction) {
+            Piece p = board.getBox(start.getX(), c).getPiece();
+            if (p == null) continue;
 
-            // Check that there is a rook in place and it hasn't moved
-            if (rookSpot.getPiece() == null || !(rookSpot.getPiece() instanceof Rook)) {
-                return false;
-            }
-            if (((Rook) rookSpot.getPiece()).hasMoved()) {
-                return false;
-            }
+            if (p instanceof Rook && p.isWhite() == this.isWhite() && !((Rook) p).hasMoved()) {
 
-            // Check that there are no pieces between the king and rook
-            int direction = (int) Math.signum(dy);
-            for (int i = 1; i < Math.abs(dy); i++) {
-                if (board.getBox(start.getX(), start.getY() + i * direction).getPiece() != null) {
-                    return false;
+
+                int loK = Math.min(start.getY(), kingDest);
+                int hiK = Math.max(start.getY(), kingDest);
+                for (int i = loK; i <= hiK; i++) {
+                    if (i == start.getY()) continue;
+                    Piece blocker = board.getBox(start.getX(), i).getPiece();
+                    if (blocker != null && blocker != p) return false;
                 }
-            }
 
-            return true;
+                int rookDest = (direction > 0) ? 5 : 3;
+                int loR = Math.min(c, rookDest);
+                int hiR = Math.max(c, rookDest);
+                for (int i = loR; i <= hiR; i++) {
+                    if (i == c || i == start.getY() || i == kingDest) continue;
+                    Piece blocker = board.getBox(start.getX(), i).getPiece();
+                    if (blocker != null && blocker != p) return false;
+                }
+                return true;
+            }
+            break;
         }
         return false;
     }

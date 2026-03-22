@@ -1,4 +1,4 @@
-package org.pocketchess.ui.gameframepack;
+package org.pocketchess.ui.gameframepack.frame;
 
 import javax.swing.*;
 import java.awt.*;
@@ -30,14 +30,9 @@ public class IconButton {
         // Fallback to system fonts
         String[] systemFonts = {"Dialog", "SansSerif", "Arial"};
         for (String systemFont : systemFonts) {
-            try {
-                Font testFont = new Font(systemFont, Font.BOLD, 32);
-                if (testFont.getFamily().equals(systemFont)) {
-                    System.out.println("Using fallback font: " + systemFont);
-                    return testFont;
-                }
-            } catch (Exception e) {
-                throw new RuntimeException(e);
+            Font testFont = new Font(systemFont, Font.BOLD, 32);
+            if (testFont.getFamily().equals(systemFont)) {
+                return testFont;
             }
         }
 

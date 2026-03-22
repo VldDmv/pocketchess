@@ -39,8 +39,7 @@ public class ImageLoader {
                 Image image = ImageIO.read(is);
                 imageCache.put(key, image);
             } catch (IOException e) {
-                System.err.println("Error loading image: " + fileName);
-                e.printStackTrace();
+                throw new RuntimeException("Failed to load piece image: " + fileName, e);
             }
         }
     }

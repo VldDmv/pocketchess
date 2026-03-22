@@ -1,4 +1,4 @@
-package org.pocketchess.core.game;
+package org.pocketchess.core.game.model;
 
 public enum GameStatus {
     ACTIVE, CHECK, WHITE_WIN, BLACK_WIN, STALEMATE, AWAITING_PROMOTION,

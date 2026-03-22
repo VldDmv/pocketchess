@@ -1,7 +1,7 @@
 package org.pocketchess.core.game.gamenotation;
 
 
-import org.pocketchess.core.game.GameMode;
+import org.pocketchess.core.game.model.GameMode;
 import org.pocketchess.core.game.status.GameStateManager;
 import org.pocketchess.core.game.status.GameStatusManager;
 import org.pocketchess.core.game.status.GameTimeManager;
@@ -30,7 +30,7 @@ public class HistoryNavigationService {
     }
 
     /**
-     * Undo YOUR last move
+     * Undo your last move
      */
     public void undoMove() {
         if (!historyManager.isLive() || historyManager.getMoveHistory().isEmpty()) {

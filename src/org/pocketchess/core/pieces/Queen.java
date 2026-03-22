@@ -23,7 +23,5 @@ public class Queen extends Piece {
         // Check move like a Bishop (diagonally)
         Bishop tempBishop = new Bishop(this.isWhite());
         return tempBishop.canMove(board, start, end);
-
-        // If neither option works, the move is impossible
     }
 }

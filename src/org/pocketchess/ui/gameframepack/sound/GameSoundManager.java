@@ -1,6 +1,6 @@
 package org.pocketchess.ui.gameframepack.sound;
 
-import org.pocketchess.core.game.GameStatus;
+import org.pocketchess.core.game.model.GameStatus;
 import org.pocketchess.core.game.moveanalyze.Move;
 import org.pocketchess.core.general.Game;
 

@@ -1,4 +1,4 @@
-package org.pocketchess.core.ai;
+package org.pocketchess.core.ai.opening;
 
 import org.pocketchess.core.game.moveanalyze.Move;
 import org.pocketchess.core.general.Game;

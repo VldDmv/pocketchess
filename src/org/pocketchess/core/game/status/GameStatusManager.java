@@ -1,6 +1,6 @@
 package org.pocketchess.core.game.status;
 
-import org.pocketchess.core.game.GameStatus;
+import org.pocketchess.core.game.model.GameStatus;
 import org.pocketchess.core.game.gamenotation.GamePositionTracker;
 import org.pocketchess.core.game.moveanalyze.ChessRules;
 import org.pocketchess.core.general.Board;

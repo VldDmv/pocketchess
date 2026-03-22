@@ -1,4 +1,4 @@
-package org.pocketchess.core.game;
+package org.pocketchess.core.game.model;
 
 public record TimeControl(int baseTimeSeconds, int incrementSeconds) {
 

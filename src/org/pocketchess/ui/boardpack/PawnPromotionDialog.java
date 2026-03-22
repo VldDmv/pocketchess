@@ -2,7 +2,7 @@ package org.pocketchess.ui.boardpack;
 
 import org.pocketchess.core.general.Game;
 import org.pocketchess.core.pieces.*;
-import org.pocketchess.ui.gameframepack.GameFrame;
+import org.pocketchess.ui.gameframepack.frame.GameFrame;
 import org.pocketchess.ui.gameframepack.sound.SoundManager;
 
 import javax.swing.*;

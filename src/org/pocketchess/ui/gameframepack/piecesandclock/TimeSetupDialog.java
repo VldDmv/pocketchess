@@ -1,6 +1,6 @@
 package org.pocketchess.ui.gameframepack.piecesandclock;
 
-import org.pocketchess.core.game.TimeControl;
+import org.pocketchess.core.game.model.TimeControl;
 import javax.swing.*;
 import java.awt.*;
 import java.util.Map;
