@@ -1,25 +1,28 @@
 package org.pocketchess.core.general;
 
 import org.pocketchess.core.ai.difficulty.AIDifficulty;
-import org.pocketchess.core.game.model.GameMode;
-import org.pocketchess.core.game.model.GameStatus;
-import org.pocketchess.core.game.model.TimeControl;
 import org.pocketchess.core.game.gamenotation.GameHistoryManager;
 import org.pocketchess.core.game.gamenotation.GamePositionTracker;
 import org.pocketchess.core.game.gamenotation.HistoryNavigationService;
+import org.pocketchess.core.game.model.GameMode;
+import org.pocketchess.core.game.model.GameStatus;
+import org.pocketchess.core.game.model.TimeControl;
 import org.pocketchess.core.game.moveanalyze.*;
 import org.pocketchess.core.game.status.*;
-import org.pocketchess.core.gamemode.LavaManager;
-import org.pocketchess.core.gamemode.LavaEffectService;
-import org.pocketchess.core.gamemode.GameModeType;
 import org.pocketchess.core.gamemode.Chess960Setup;
-import org.pocketchess.core.pieces.*;
+import org.pocketchess.core.gamemode.GameModeType;
+import org.pocketchess.core.gamemode.LavaEffectService;
+import org.pocketchess.core.gamemode.LavaManager;
+import org.pocketchess.core.pieces.King;
+import org.pocketchess.core.pieces.Piece;
+import org.pocketchess.core.pieces.Rook;
+import org.pocketchess.core.pieces.Spot;
 
 import java.util.List;
 
 /**
  * Main Game class – coordinates all chess game components.
- *
+ * <p>
  * Sound events are routed through {@link SoundEventCallback}, set by the UI layer via
  * {@link #setSoundCallback(SoundEventCallback)}. AI copies never call setSoundCallback,
  * so they have no dependency on the UI package.
@@ -56,15 +59,15 @@ public class Game implements GameStatusCallback {
     // ─────────────────────────────────────────────────────────────────────────
 
     public Game() {
-        this.board           = new Board();
-        this.lavaManager     = new LavaManager();
-        this.ruleEngine      = new LavaAwareRuleEngine(new RuleEngine(), lavaManager, board);
-        this.stateManager    = new GameStateManager();
+        this.board = new Board();
+        this.lavaManager = new LavaManager();
+        this.ruleEngine = new LavaAwareRuleEngine(new RuleEngine(), lavaManager, board);
+        this.stateManager = new GameStateManager();
         this.positionTracker = new GamePositionTracker();
-        this.statusManager   = new GameStatusManager(ruleEngine, positionTracker);
-        this.moveExecutor    = new GameMoveExecutor(board);
-        this.historyManager  = new GameHistoryManager(board, moveExecutor, positionTracker);
-        this.timeManager     = new GameTimeManager(this);
+        this.statusManager = new GameStatusManager(ruleEngine, positionTracker);
+        this.moveExecutor = new GameMoveExecutor(board);
+        this.historyManager = new GameHistoryManager(board, moveExecutor, positionTracker);
+        this.timeManager = new GameTimeManager(this);
         this.temporaryMoveHandler = new TemporaryMoveHandler(board, positionTracker);
 
         this.turnFinisher = new TurnFinisher(stateManager, timeManager,
@@ -86,7 +89,7 @@ public class Game implements GameStatusCallback {
     }
 
     public Game(Game other) {
-        this.board       = new Board(other.board);
+        this.board = new Board(other.board);
         this.timeControl = other.timeControl;
 
         this.lavaManager = new LavaManager(other.lavaManager);
@@ -100,10 +103,10 @@ public class Game implements GameStatusCallback {
         this.stateManager.setAiDifficulty(other.stateManager.getAiDifficulty());
 
         this.positionTracker = new GamePositionTracker(other.positionTracker);
-        this.statusManager   = new GameStatusManager(ruleEngine, positionTracker);
-        this.moveExecutor    = new GameMoveExecutor(board);
-        this.historyManager  = new GameHistoryManager(board, moveExecutor, positionTracker);
-        this.timeManager     = new GameTimeManager(this);
+        this.statusManager = new GameStatusManager(ruleEngine, positionTracker);
+        this.moveExecutor = new GameMoveExecutor(board);
+        this.historyManager = new GameHistoryManager(board, moveExecutor, positionTracker);
+        this.timeManager = new GameTimeManager(this);
         this.temporaryMoveHandler = new TemporaryMoveHandler(board, positionTracker);
 
         // AI copies: no lava effect callback, no sound callback
@@ -140,42 +143,114 @@ public class Game implements GameStatusCallback {
     //  Lava
     // ─────────────────────────────────────────────────────────────────────────
 
-    public LavaManager getLavaManager() { return lavaManager; }
-    public boolean isLavaMode()         { return lavaManager.isEnabled(); }
+    public LavaManager getLavaManager() {
+        return lavaManager;
+    }
+
+    public boolean isLavaMode() {
+        return lavaManager.isEnabled();
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     //  Getters
     // ─────────────────────────────────────────────────────────────────────────
 
-    public void setCallback(AICallback callback) { aiMoveService.setCallback(callback); }
+    public void setCallback(AICallback callback) {
+        aiMoveService.setCallback(callback);
+    }
 
-    public Board getBoard()               { return board; }
+    public Board getBoard() {
+        return board;
+    }
+
     public boolean isThreefoldRepetition() {
         return positionTracker.isThreefoldRepetition(board, stateManager.isWhiteTurn());
     }
-    public boolean isFiftyMoveRule()      { return positionTracker.isFiftyMoveRule(); }
+    /**
+     * Returns how many times the current position has appeared in this game.
+     * Used by NegamaxEngine to detect and penalise moves that build toward
+     * a threefold repetition before it actually occurs.
+     *
+     *  count == 1  →  first time here (normal)
+     *  count == 2  →  position repeated once  →  engine applies penalty
+     *  count >= 3  →  threefold repetition    →  scored as draw
+     */
+    public int getPositionCount() {
+        return positionTracker.getPositionCount(board, stateManager.isWhiteTurn());
+    }
+    public boolean isFiftyMoveRule() {
+        return positionTracker.isFiftyMoveRule();
+    }
 
-    @Override public boolean isWhiteTurn()  { return stateManager.isWhiteTurn(); }
-    @Override public GameStatus getStatus() { return stateManager.getStatus(); }
+    @Override
+    public boolean isWhiteTurn() {
+        return stateManager.isWhiteTurn();
+    }
 
-    public Move getLastMove()             { return historyManager.getLastMove(); }
-    public GameMode getGameMode()         { return stateManager.getGameMode(); }
-    public Piece.Color getPlayerColor()   { return stateManager.getPlayerColor(); }
-    public List<Move> getMoveHistory()    { return historyManager.getMoveHistory(); }
-    public int getCurrentMoveIndex()      { return historyManager.getCurrentMoveIndex(); }
+    @Override
+    public GameStatus getStatus() {
+        return stateManager.getStatus();
+    }
 
-    public List<Piece> getWhiteCapturedPieces() { return moveExecutor.getWhiteCapturedPieces(); }
-    public List<Piece> getBlackCapturedPieces() { return moveExecutor.getBlackCapturedPieces(); }
+    public Move getLastMove() {
+        return historyManager.getLastMove();
+    }
 
-    public String getWhiteTimeString()    { return timeManager.getWhiteTimeString(); }
-    public String getBlackTimeString()    { return timeManager.getBlackTimeString(); }
+    public GameMode getGameMode() {
+        return stateManager.getGameMode();
+    }
 
-    public boolean isDrawOffered()        { return stateManager.isDrawOffered(); }
-    public boolean isGameOver()           { return stateManager.isGameOver(); }
-    public boolean isLive()               { return historyManager.isLive(); }
-    public TimeControl getTimeControl()   { return this.timeControl; }
-    public boolean isAIsTurn()            { return stateManager.isAIsTurn(); }
-    public ChessRules getRuleEngine()     { return ruleEngine; }
+    public Piece.Color getPlayerColor() {
+        return stateManager.getPlayerColor();
+    }
+
+    public List<Move> getMoveHistory() {
+        return historyManager.getMoveHistory();
+    }
+
+    public int getCurrentMoveIndex() {
+        return historyManager.getCurrentMoveIndex();
+    }
+
+    public List<Piece> getWhiteCapturedPieces() {
+        return moveExecutor.getWhiteCapturedPieces();
+    }
+
+    public List<Piece> getBlackCapturedPieces() {
+        return moveExecutor.getBlackCapturedPieces();
+    }
+
+    public String getWhiteTimeString() {
+        return timeManager.getWhiteTimeString();
+    }
+
+    public String getBlackTimeString() {
+        return timeManager.getBlackTimeString();
+    }
+
+    public boolean isDrawOffered() {
+        return stateManager.isDrawOffered();
+    }
+
+    public boolean isGameOver() {
+        return stateManager.isGameOver();
+    }
+
+    public boolean isLive() {
+        return historyManager.isLive();
+    }
+
+    public TimeControl getTimeControl() {
+        return this.timeControl;
+    }
+
+    public boolean isAIsTurn() {
+        return stateManager.isAIsTurn();
+    }
+
+    public ChessRules getRuleEngine() {
+        return ruleEngine;
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     //  Timer callback
@@ -279,7 +354,7 @@ public class Game implements GameStatusCallback {
 
         int sizeBefore = historyManager.getMoveHistory().size();
         historyNavigationService.undoMove();
-        int sizeAfter   = historyManager.getMoveHistory().size();
+        int sizeAfter = historyManager.getMoveHistory().size();
         int undoneCount = sizeBefore - sizeAfter;
         for (int i = 0; i < undoneCount; i++) {
             lavaManager.popLatestSnapshot();
@@ -327,7 +402,9 @@ public class Game implements GameStatusCallback {
         if (soundCallback != null) soundCallback.onCheckmate();
     }
 
-    public void setupTimer(Runnable uiUpdater) { timeManager.setupTimer(uiUpdater); }
+    public void setupTimer(Runnable uiUpdater) {
+        timeManager.setupTimer(uiUpdater);
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     //  Rule engine delegation
@@ -337,7 +414,9 @@ public class Game implements GameStatusCallback {
         return ruleEngine.isMoveLegal(board, start, end);
     }
 
-    public Spot findKing(boolean isWhite)      { return ruleEngine.findKing(board, isWhite); }
+    public Spot findKing(boolean isWhite) {
+        return ruleEngine.findKing(board, isWhite);
+    }
 
     public boolean isKingInCheck(boolean isWhite) {
         return ruleEngine.isKingInCheck(board, isWhite);
