@@ -10,10 +10,6 @@ import org.pocketchess.core.pieces.Spot;
 
 /**
  * Chess rules engine.
- *
- * Chess960 change: {@link #canCastleThroughSquares} now allows a friendly
- * unmoved rook to occupy squares on the king's transit path (Chess960 castling
- * positions where the rook is between the king and its destination).
  */
 public class RuleEngine implements ChessRules {
     private final AttackChecker  attackChecker;
@@ -104,32 +100,14 @@ public class RuleEngine implements ChessRules {
     /**
      * Validates that the king does not pass through or land on an attacked
      * square during castling, and that the transit path is clear.
-     *
-     * Chess960 fix: a friendly unmoved rook may occupy any of the two
-     * intermediate squares (start+1, start+2).  In standard chess the rook
-     * is always beyond the king's destination so this never triggers; in
-     * Chess960 the rook can be exactly 1 or 2 squares away.
      */
     private boolean canCastleThroughSquares(Board board, Spot start, Spot end, Piece king) {
-        int direction = (end.getY() - start.getY()) > 0 ? 1 : -1;
+        int loK = Math.min(start.getY(), end.getY());
+        int hiK = Math.max(start.getY(), end.getY());
 
-        for (int i = 1; i <= 2; i++) {
-            int col = start.getY() + i * direction;
-            if (col < 0 || col > 7) return false;
+        for (int col = loK; col <= hiK; col++) {
             Spot throughSpot = board.getBox(start.getX(), col);
-            Piece p          = throughSpot.getPiece();
 
-            // The square must be empty, UNLESS it is the castling rook
-            // (an unmoved friendly Rook).  This handles Chess960 positions
-            // where the rook sits between the king and the king's destination.
-            if (i < 2 && p != null) {
-                boolean isCastlingRook = (p instanceof Rook)
-                        && p.isWhite() == king.isWhite()
-                        && !((Rook) p).hasMoved();
-                if (!isCastlingRook) return false; // genuinely blocked
-            }
-
-            // King must not pass through a square under attack
             if (isSquareUnderAttack(board, throughSpot, !king.isWhite())) {
                 return false;
             }

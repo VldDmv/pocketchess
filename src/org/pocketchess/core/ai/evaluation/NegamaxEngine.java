@@ -12,22 +12,6 @@ import java.util.List;
 /**
  * Negamax: Alpha-Beta, PVS, Null Move Pruning, LMR,
  * Killer/History, Repetition avoidance, Check extensions.
- *
- * NEW — Check extensions:
- *   When a move gives check to the opponent, we extend the search by 1 ply
- *   instead of reducing it.  This means checking combinations are always
- *   searched to full depth regardless of their position in the move list.
- *
- *   Why this helps:
- *   - LMR would have reduced the search depth for quiet late moves.
- *     A checking move is NEVER quiet — we skip LMR for it entirely.
- *   - The extension (+1 ply) lets the engine see the full tactical sequence
- *     one move further, catching mates and material-winning combinations
- *     that would otherwise be cut off at the horizon.
- *
- *   Cost: extending every check can be expensive. We limit extensions:
- *   - Only extend once per path (no recursive stacking beyond MAX_EXTENSIONS).
- *   - Never extend if depth is already above the root depth (prevents explosion).
  */
 public class NegamaxEngine {
     private final TranspositionTable transpositionTable;
@@ -45,18 +29,15 @@ public class NegamaxEngine {
     // ── Repetition ───────────────────────────────────────────────────────────
     private static final int REPETITION_WARNING_PENALTY = 150;
 
-    // ── Check extension ───────────────────────────────────────────────────────
     /**
-     * How many extra plies to add when a move gives check.
-     * 1 is the standard value used in most engines.
+     * If the position is this bad or worse (from the moving side's perspective),
+     * skip the repetition penalty — a draw is actually welcome.
      */
-    private static final int CHECK_EXTENSION = 1;
+    private static final int REPETITION_PENALTY_THRESHOLD = -200;
 
-    /**
-     * Maximum total extension along any single path.
-     * Prevents the search tree from exploding in positions with many checks.
-     */
-    private static final int MAX_EXTENSIONS = 3;
+    // ── Check extension ───────────────────────────────────────────────────────
+    private static final int CHECK_EXTENSION = 1;
+    private static final int MAX_EXTENSIONS  = 3;
 
     public NegamaxEngine(TranspositionTable tt, FastMoveGenerator mg,
                          QuiescenceSearch qs, PositionEvaluator eval,
@@ -109,9 +90,6 @@ public class NegamaxEngine {
 
     // ── Recursive ────────────────────────────────────────────────────────────
 
-    /**
-     * @param extensionsSoFar total plies already extended on this path
-     */
     public int negamax(Game game, int depth, int alpha, int beta,
                        int plyFromRoot, int extensionsSoFar) {
 
@@ -179,13 +157,13 @@ public class NegamaxEngine {
                 if (posCount >= 2) {
                     int deepScore = -negamax(game, depth - 1, -beta, -alpha,
                             plyFromRoot + 1, extensionsSoFar);
-                    score = deepScore - REPETITION_WARNING_PENALTY;
+                    int penalty = (deepScore > REPETITION_PENALTY_THRESHOLD)
+                            ? REPETITION_WARNING_PENALTY
+                            : 0;
+                    score = deepScore - penalty;
 
                 } else {
                     // ── Check extension ───────────────────────────────────────
-                    // If this move gives check to the opponent, extend the search.
-                    // "opponent in check" after makeTemporaryMove means !isWhiteTurn()
-                    // because the turn has already flipped.
                     boolean givesCheck = game.isKingInCheck(game.isWhiteTurn());
                     int extension = 0;
                     if (givesCheck && extensionsSoFar < MAX_EXTENSIONS) {

@@ -40,10 +40,8 @@ public class GameMoveExecutor {
         Piece capturedPiece = null;
 
         if (isCastling) {
-            // Rook on endSpot is a participant, not a victim — leave pieceKilled null.
             move.pieceKilled = null;
         } else {
-            // En-passant: the captured pawn is beside the destination, not on it
             if (sourcePiece instanceof Pawn && endSpot == board.getEnPassantTargetSquare()) {
                 Spot capturedPawnSpot = board.getBox(startSpot.getX(), endSpot.getY());
                 capturedPiece = capturedPawnSpot.getPiece();
@@ -60,7 +58,6 @@ public class GameMoveExecutor {
             }
         }
 
-        // Execute the move on the board
         int kingOrigCol = startSpot.getY();
         int kingDestCol = endSpot.getY();
 
@@ -81,7 +78,6 @@ public class GameMoveExecutor {
             board.setEnPassantTargetSquare(null);
         }
 
-        // 50-move rule counter: castling is a king move (no pawn, no capture)
         int newHalfMoves = (sourcePiece instanceof Pawn || capturedPiece != null)
                 ? 0
                 : currentHalfMoves + 1;
@@ -92,31 +88,42 @@ public class GameMoveExecutor {
 
     public void replayMove(Move move) {
         Spot startSpot = board.getBox(move.start.getX(), move.start.getY());
-        Spot endSpot = board.getBox(move.end.getX(), move.end.getY());
+        Spot endSpot   = board.getBox(move.end.getX(),   move.end.getY());
         Piece sourcePiece = startSpot.getPiece();
 
+        // ── En-passant capture ────────────────────────────────────────────────
         if (sourcePiece instanceof Pawn && endSpot == board.getEnPassantTargetSquare()) {
             Spot capturedPawnSpot = board.getBox(startSpot.getX(), endSpot.getY());
             Piece capturedPiece = capturedPawnSpot.getPiece();
             if (capturedPiece != null) {
-                (capturedPiece.isWhite() ? blackCapturedPieces : whiteCapturedPieces).add(capturedPiece);
+                (capturedPiece.isWhite() ? blackCapturedPieces : whiteCapturedPieces)
+                        .add(capturedPiece);
             }
             capturedPawnSpot.setPiece(null);
+
         } else if (!move.wasCastlingMove && endSpot.getPiece() != null) {
             Piece capturedPiece = endSpot.getPiece();
-            (capturedPiece.isWhite() ? blackCapturedPieces : whiteCapturedPieces).add(capturedPiece);
+            (capturedPiece.isWhite() ? blackCapturedPieces : whiteCapturedPieces)
+                    .add(capturedPiece);
         }
 
         int replayKingOrigCol = startSpot.getY();
         int replayKingDestCol = endSpot.getY();
 
-        if (move.promotedTo != null) endSpot.setPiece(move.promotedTo);
-
         if (move.wasCastlingMove) {
-            executeCastlingAtomic(startSpot.getX(), replayKingOrigCol, replayKingDestCol, sourcePiece);
+            executeCastlingAtomic(startSpot.getX(), replayKingOrigCol,
+                    replayKingDestCol, sourcePiece);
         } else {
+            // ── FIX: move the piece first, THEN apply promotion ───────────────
+            // Previously: promotedTo was set BEFORE sourcePiece was placed,
+            // then endSpot.setPiece(sourcePiece) overwrote the queen with the pawn.
             endSpot.setPiece(sourcePiece);
             startSpot.setPiece(null);
+
+            // Apply promotion AFTER placing the pawn on the destination square.
+            if (move.promotedTo != null) {
+                endSpot.setPiece(move.promotedTo);
+            }
         }
 
         if (sourcePiece instanceof King) ((King) sourcePiece).setHasMoved(true);
@@ -130,13 +137,10 @@ public class GameMoveExecutor {
         }
     }
 
-    /**
-     * Atomic Chess960 castling.
-     * Finds rook before touching the board, clears both sources, places both pieces.
-     */
-    private void executeCastlingAtomic(int row, int kingOrigCol, int kingDestCol, Piece king) {
+    private void executeCastlingAtomic(int row, int kingOrigCol,
+                                       int kingDestCol, Piece king) {
         int direction = CastlingUtils.castlingDirection(kingDestCol);
-        int rookNewY = CastlingUtils.rookDestCol(kingDestCol);
+        int rookNewY  = CastlingUtils.rookDestCol(kingDestCol);
 
         int rookY = CastlingUtils.findCastlingRookCol(board, row, kingOrigCol, direction);
         Piece rook = (rookY != -1) ? board.getBox(row, rookY).getPiece() : null;
@@ -156,11 +160,6 @@ public class GameMoveExecutor {
         blackCapturedPieces.clear();
     }
 
-    public List<Piece> getWhiteCapturedPieces() {
-        return whiteCapturedPieces;
-    }
-
-    public List<Piece> getBlackCapturedPieces() {
-        return blackCapturedPieces;
-    }
+    public List<Piece> getWhiteCapturedPieces() { return whiteCapturedPieces; }
+    public List<Piece> getBlackCapturedPieces() { return blackCapturedPieces; }
 }
