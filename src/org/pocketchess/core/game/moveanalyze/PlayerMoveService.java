@@ -81,12 +81,11 @@ public class PlayerMoveService {
                 endSpot = board.getBox(endX, endY);
             }
             // 2. The player set the king on the g- or c-file
-            // Only treat as castling if king moves MORE than 1 square.
-            // This prevents a king on d1 moving one step to c1 from being
-            // misidentified as queenside castling.
             else if ((endY == 6 || endY == 2) && Math.abs(endY - startY) > 1) {
                 if (ruleEngine.isCastlingMoveLegal(board, startSpot, endSpot)) {
                     isCastling = true;
+                } else {
+                    return false;
                 }
             }
         }

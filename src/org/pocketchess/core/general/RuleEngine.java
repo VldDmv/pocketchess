@@ -23,9 +23,21 @@ public class RuleEngine implements ChessRules {
     @Override
     public boolean isMoveLegal(Board board, Spot start, Spot end) {
         Piece sourcePiece = start.getPiece();
-        if (sourcePiece == null || !sourcePiece.canMove(board, start, end)) {
-            return false;
+        if (sourcePiece == null) return false;
+        if (sourcePiece instanceof King
+                && !((King) sourcePiece).hasMoved()
+                && start.getX() == end.getX()) {
+            int dy = Math.abs(start.getY() - end.getY());
+            Piece target = end.getPiece();
+            boolean isCastleAttempt =
+                    (dy > 1 && (end.getY() == 6 || end.getY() == 2))
+                            || (target instanceof Rook && target.isWhite() == sourcePiece.isWhite());
+            if (isCastleAttempt) {
+                return isCastlingMoveLegal(board, start, end);
+            }
         }
+
+        if (!sourcePiece.canMove(board, start, end)) return false;
         return isKingSafeAfterMove(board, start, end, sourcePiece);
     }
 
