@@ -1,33 +1,38 @@
 package org.pocketchess.ui.gameframepack.notation;
 
-import org.pocketchess.core.game.model.GameMode;
 import org.pocketchess.core.game.model.GameStatus;
 import org.pocketchess.core.game.moveanalyze.Move;
-import org.pocketchess.core.game.model.TimeControl;
-import org.pocketchess.core.pieces.*;
 import org.pocketchess.core.general.Board;
 import org.pocketchess.core.general.Game;
+import org.pocketchess.core.pieces.*;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Converts Move objects into Standard Algebraic Notation (SAN).
- *   A notation cache (Map<Move, String>) is maintained.  When getNotationForMove()
- *   is called for a move that is not yet cached, rebuildCache() replays the entire
- *   game history ONCE, computing and storing notation for every move in a single
- *   sequential pass.  Subsequent look-ups are O(1) map reads.
- *
- *   The cache is invalidated whenever the history size changes (new move made,
- *   undo performed, PGN loaded).  Identity comparison on Move objects keeps the
- *   check free.
+ * A notation cache (Map<Move, String>) is maintained.  When getNotationForMove()
+ * is called for a move that is not yet cached, rebuildCache() replays the entire
+ * game history ONCE, computing and storing notation for every move in a single
+ * sequential pass.  Subsequent look-ups are O(1) map reads.
+ * <p>
+ * The cache is invalidated whenever the history size changes (new move made,
+ * undo performed, PGN loaded).  Identity comparison on Move objects keeps the
+ * check free.
  */
 public class ChessNotationFormatter {
     private final Game game;
 
-    /** Cached notation strings, keyed by Move identity. */
+    /**
+     * Cached notation strings, keyed by Move identity.
+     */
     private final Map<Move, String> notationCache = new IdentityHashMap<>();
 
-    /** Size of game.getMoveHistory() when the cache was last built. */
+    /**
+     * Size of game.getMoveHistory() when the cache was last built.
+     */
     private int cachedHistorySize = -1;
 
     public ChessNotationFormatter(Game game) {
@@ -65,29 +70,31 @@ public class ChessNotationFormatter {
     /**
      * Replays the game once from the start, computing notation for every move
      * at the correct board state.
-     *
-     * Board state at move i is needed to detect ambiguity (two knights that can
+     * <p>
+     * Board state at move is needed to detect ambiguity (two knights that can
      * both reach the same square).  We achieve this by replaying with a temporary
      * Game and computing each move's notation BEFORE applying it to the temp game.
      */
     private void rebuildCache(List<Move> history) {
         notationCache.clear();
-
-        // Temporary game that mirrors the real game's starting state
-        Game tempGame = new Game();
-        tempGame.resetGame(new TimeControl(1, 0), GameMode.PVP, Piece.Color.WHITE);
+        Game tempGame = game.createNotationGame();
 
         for (Move move : history) {
-            // Board is now in the state it was in BEFORE this move — compute notation
             String notation = computeNotation(move, tempGame);
             notationCache.put(move, notation);
 
-            // Advance the temp game
-            tempGame.playerMove(
-                    move.start.getX(), move.start.getY(),
-                    move.end.getX(),   move.end.getY(),
-                    move.promotedTo
-            );
+            if (move.promotedTo != null) {
+                tempGame.playerMove(
+                        move.start.getX(), move.start.getY(),
+                        move.end.getX(), move.end.getY(),
+                        move.promotedTo
+                );
+            } else {
+                tempGame.playerMove(
+                        move.start.getX(), move.start.getY(),
+                        move.end.getX(), move.end.getY()
+                );
+            }
         }
 
         cachedHistorySize = history.size();
@@ -103,11 +110,11 @@ public class ChessNotationFormatter {
             return (move.end.getY() > 5 ? "O-O" : "O-O-O") + checkOrMateSymbol(move);
         }
 
-        String pieceSymbol  = getPieceSymbol(move.pieceMoved);
+        String pieceSymbol = getPieceSymbol(move.pieceMoved);
         String captureSymbol = move.pieceKilled != null ? "x" : "";
-        String endCoords    = getCoords(move.end);
-        String promotion    = move.promotedTo != null ? "=" + getPieceSymbol(move.promotedTo) : "";
-        String checkSymbol  = checkOrMateSymbol(move);
+        String endCoords = getCoords(move.end);
+        String promotion = move.promotedTo != null ? "=" + getPieceSymbol(move.promotedTo) : "";
+        String checkSymbol = checkOrMateSymbol(move);
 
         // Pawn
         if (move.pieceMoved instanceof Pawn) {
@@ -123,7 +130,7 @@ public class ChessNotationFormatter {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    //  Ambiguity resolution  (now called with the pre-built board state)
+    //  Ambiguity resolution
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
@@ -132,9 +139,9 @@ public class ChessNotationFormatter {
      * could also legally reach the destination.
      */
     private String resolveAmbiguity(Move move, Game boardState) {
-        Board board        = boardState.getBoard();
-        Spot  startSpot    = board.getBox(move.start.getX(), move.start.getY());
-        Spot  endSpot      = board.getBox(move.end.getX(),   move.end.getY());
+        Board board = boardState.getBoard();
+        Spot startSpot = board.getBox(move.start.getX(), move.start.getY());
+        Spot endSpot = board.getBox(move.end.getX(), move.end.getY());
 
         // Collect other pieces of the same type and colour that can reach endSpot
         List<Spot> ambiguous = new ArrayList<>();
@@ -162,8 +169,8 @@ public class ChessNotationFormatter {
             if (s.getX() == startSpot.getX()) rankUnique = false;
         }
 
-        if (fileUnique)  return String.valueOf(getCoords(startSpot).charAt(0));
-        if (rankUnique)  return String.valueOf(getCoords(startSpot).charAt(1));
+        if (fileUnique) return String.valueOf(getCoords(startSpot).charAt(0));
+        if (rankUnique) return String.valueOf(getCoords(startSpot).charAt(1));
         return getCoords(startSpot);
     }
 
@@ -179,9 +186,9 @@ public class ChessNotationFormatter {
     }
 
     private String getPieceSymbol(Piece piece) {
-        if (piece instanceof King)   return "K";
-        if (piece instanceof Queen)  return "Q";
-        if (piece instanceof Rook)   return "R";
+        if (piece instanceof King) return "K";
+        if (piece instanceof Queen) return "Q";
+        if (piece instanceof Rook) return "R";
         if (piece instanceof Bishop) return "B";
         if (piece instanceof Knight) return "N";
         return "";

@@ -107,4 +107,22 @@ public class Board {
                     this.initialBoxes[r][c] = new Spot(other.initialBoxes[r][c]);
         }
     }
+
+    /**
+     * Returns a copy of the initial board snapshot (piece layout at game start).
+     * Returns null if saveAsInitial() was never called.
+     * Used by ChessNotationFormatter to replay from the correct starting
+     * position — critical for Chess960 where the layout differs from standard.
+     */
+    public Board getInitialSnapshot() {
+        if (initialBoxes == null) return null;
+        Board snap = new Board();
+        for (int r = 0; r < 8; r++)
+            for (int c = 0; c < 8; c++)
+                snap.boxes[r][c] = new Spot(initialBoxes[r][c]);
+        snap.enPassantTargetSquare = null;
+        snap.initialBoxes = null;
+        return snap;
+    }
+
 }

@@ -8,42 +8,30 @@ public final class FenUtils {
     }
 
     /**
-     * Appends castling rights for one side.
-     * Works for both Classic (king on e-file) and Chess960 (king anywhere).
-     * Uses uppercase letters for White (K/Q), lowercase for Black (k/q).
+     * Appends castling rights for one side using X-FEN format.
      */
     private static void appendCastlingRights(Board board, StringBuilder sb, boolean isWhite) {
         int rank = isWhite ? 7 : 0;
+        Spot kingSpot = null;
 
-        // Find the unmoved king on this rank
-        int kingCol = -1;
+
         for (int c = 0; c < 8; c++) {
             Piece p = board.getBox(rank, c).getPiece();
             if (p instanceof King && p.isWhite() == isWhite && !((King) p).hasMoved()) {
-                kingCol = c;
+                kingSpot = board.getBox(rank, c);
                 break;
             }
         }
-        if (kingCol == -1) return; // King has moved — no castling rights
+        if (kingSpot == null) return;
 
-        // Kingside: scan right of king for unmoved rook
-        for (int c = kingCol + 1; c < 8; c++) {
+        for (int c = 7; c >= 0; c--) {
             Piece p = board.getBox(rank, c).getPiece();
             if (p instanceof Rook && p.isWhite() == isWhite && !((Rook) p).hasMoved()) {
-                sb.append(isWhite ? 'K' : 'k');
-                break;
-            }
-            if (p != null) break;
-        }
+                char rookFile = (char) ('A' + c);
+                if (!isWhite) rookFile = Character.toLowerCase(rookFile);
 
-        // Queenside: scan left of king for unmoved rook
-        for (int c = kingCol - 1; c >= 0; c--) {
-            Piece p = board.getBox(rank, c).getPiece();
-            if (p instanceof Rook && p.isWhite() == isWhite && !((Rook) p).hasMoved()) {
-                sb.append(isWhite ? 'Q' : 'q');
-                break;
+                sb.append(rookFile);
             }
-            if (p != null) break;
         }
     }
 

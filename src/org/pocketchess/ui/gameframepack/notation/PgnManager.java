@@ -1,10 +1,12 @@
 package org.pocketchess.ui.gameframepack.notation;
 
-import org.pocketchess.core.game.model.GameMode;
-import org.pocketchess.core.general.Game;
-import org.pocketchess.core.game.moveanalyze.Move;
 import org.pocketchess.core.game.gamenotation.NotationProvider;
+import org.pocketchess.core.game.model.GameMode;
+import org.pocketchess.core.game.moveanalyze.Move;
+import org.pocketchess.core.game.utils.FenUtils;
 import org.pocketchess.core.game.utils.PgnUtils;
+import org.pocketchess.core.gamemode.GameModeType;
+import org.pocketchess.core.general.Game;
 import org.pocketchess.core.pieces.Piece;
 
 import java.awt.*;
@@ -32,21 +34,31 @@ public class PgnManager {
     public void exportGameToPgn() {
         StringBuilder pgn = new StringBuilder();
 
-
         pgn.append("[Event \"Java Chess Game\"]\n");
         pgn.append("[Site \"Local\"]\n");
         pgn.append("[Date \"").append(new SimpleDateFormat("yyyy.MM.dd").format(new Date())).append("\"]\n");
         pgn.append("[Round \"-\"]\n");
 
+        org.pocketchess.core.general.Board initialBoard = game.getBoard().getInitialSnapshot();
+        String initialFen = "";
+
+        if (initialBoard != null) {
+            initialFen = FenUtils.generateFEN(initialBoard, true);
+        }
+
+        if (game.getGameModeType() == GameModeType.CHESS960 && !initialFen.isEmpty()) {
+            pgn.append("[Variant \"Chess960\"]\n");
+            pgn.append("[SetUp \"1\"]\n");
+            pgn.append("[FEN \"").append(initialFen).append("\"]\n");
+        }
+
         String whiteName = "?";
         String blackName = "?";
 
         if (game.getGameMode() == GameMode.PVP) {
-            // Player vs Player
             whiteName = "Human";
             blackName = "Human";
         } else if (game.getGameMode() == GameMode.PVE) {
-            // Player vs Engine
             if (game.getPlayerColor() == Piece.Color.WHITE) {
                 whiteName = "Human";
                 blackName = "AI";

@@ -51,6 +51,7 @@ public class Game implements GameStatusCallback {
     private final LavaEffectService lavaEffectService;
 
     private TimeControl timeControl;
+    private GameModeType gameModeType = GameModeType.CLASSIC;
 
     private SoundEventCallback soundCallback;
 
@@ -94,7 +95,7 @@ public class Game implements GameStatusCallback {
 
         this.lavaManager = new LavaManager(other.lavaManager);
         LavaAwareRuleEngine aiRuleEngine = new LavaAwareRuleEngine(new RuleEngine(), lavaManager, board);
-        aiRuleEngine.setAISimulation(true);
+        aiRuleEngine.setAISimulation();
         this.ruleEngine = aiRuleEngine;
 
         this.stateManager = new GameStateManager();
@@ -122,7 +123,6 @@ public class Game implements GameStatusCallback {
         this.historyNavigationService = new HistoryNavigationService(historyManager, stateManager,
                 timeManager, statusManager, board);
 
-        // soundCallback intentionally null for AI copies
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -166,18 +166,20 @@ public class Game implements GameStatusCallback {
     public boolean isThreefoldRepetition() {
         return positionTracker.isThreefoldRepetition(board, stateManager.isWhiteTurn());
     }
+
     /**
      * Returns how many times the current position has appeared in this game.
      * Used by NegamaxEngine to detect and penalise moves that build toward
      * a threefold repetition before it actually occurs.
-     *
-     *  count == 1  →  first time here (normal)
-     *  count == 2  →  position repeated once  →  engine applies penalty
-     *  count >= 3  →  threefold repetition    →  scored as draw
+     * <p>
+     * count == 1  →  first time here (normal)
+     * count == 2  →  position repeated once  →  engine applies penalty
+     * count >= 3  →  threefold repetition    →  scored as draw
      */
     public int getPositionCount() {
         return positionTracker.getPositionCount(board, stateManager.isWhiteTurn());
     }
+
     public boolean isFiftyMoveRule() {
         return positionTracker.isFiftyMoveRule();
     }
@@ -269,6 +271,7 @@ public class Game implements GameStatusCallback {
     public void resetGame(TimeControl tc, GameMode mode, Piece.Color playerColor,
                           AIDifficulty difficulty, GameModeType variant) {
         this.timeControl = tc;
+        this.gameModeType = variant;
         stateManager.configure(mode, playerColor, difficulty);
 
         board.resetBoard();
@@ -465,4 +468,29 @@ public class Game implements GameStatusCallback {
         stateManager.setWhiteTurn(
                 temporaryMoveHandler.undoNullMove(stateManager.isWhiteTurn()));
     }
+
+    /**
+     * Returns the game variant (CLASSIC, CHESS960, or LAVA).
+     */
+    public GameModeType getGameModeType() {
+        return gameModeType;
+    }
+
+    /**
+     * Creates a fresh Game that starts from the same initial board as this game.
+     */
+    public Game createNotationGame() {
+        Game g = new Game();
+        Board snapshot = board.getInitialSnapshot();
+        if (snapshot != null) {
+            for (int r = 0; r < 8; r++)
+                for (int c = 0; c < 8; c++)
+                    g.board.getBox(r, c).setPiece(snapshot.getBox(r, c).getPiece());
+            g.board.saveAsInitial();
+            g.positionTracker.reset();
+            g.positionTracker.recordInitialPosition(g.board);
+        }
+        return g;
+    }
+
 }
