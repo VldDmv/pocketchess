@@ -64,7 +64,7 @@ public class EvaluationParameters implements Serializable {
      * Weight of passed pawns.
      * A pawn that can reach promotion without interference.
      */
-    public int passedPawnWeight = 20;
+    public int passedPawnWeight = 40;
 
     /**
      * Penalty for an isolated pawn (no pawns on adjacent files).

@@ -10,19 +10,6 @@ import org.pocketchess.core.pieces.*;
 
 /**
  * Main position evaluator.
- *
- * isEndGame() threshold fix:
- *   Was: queenCount == 0 OR totalMaterial < 4000
- *   Now: queenCount == 0 AND totalMaterial < 3000
- *
- *   The old OR condition meant "endgame" triggered even when queens were
- *   gone but rooks/bishops/knights remained (material ~4500+ cp) — exactly
- *   the complex positions shown in the screenshots.  The new AND + lower
- *   threshold fires only in genuine endgames.
- *
- *   3000 cp ≈ two rooks + bishop + several pawns — still a rook endgame,
- *   but without queens and heavy pieces the king-safety tables should
- *   switch to the endgame variant.
  */
 public class PositionEvaluator {
     private final EvaluationParameters params;
@@ -51,9 +38,8 @@ public class PositionEvaluator {
     /**
      * Total non-king material (both sides) below which the king switches
      * to endgame piece-square tables.
-     * 3000 cp: no queens, roughly 2 rooks + minor piece + pawns per side.
      */
-    private static final int ENDGAME_MATERIAL_THRESHOLD = 3000;
+    private static final int ENDGAME_MATERIAL_THRESHOLD = 2200;
 
     public PositionEvaluator(EvaluationParameters params,
                              FastMoveGenerator moveGenerator,
@@ -83,15 +69,18 @@ public class PositionEvaluator {
             return s;
         }
 
+        boolean isEndGame = isEndGame(game);
+
         int score = 0;
         score += getMaterialScore(game);
-        score += getPositionalScore(game);
+        score += getPositionalScore(game, isEndGame);
         score += getMobilityScore(game);
         score += strategicEval.getKingSafetyScore(game);
         score += strategicEval.getStrategicBonuses(game);
         score += strategicEval.getPassedPawnBonus(game);
         score += strategicEval.evaluatePawnStructure(game);
         score += getHangingPieceScore(game);
+        score += strategicEval.getBackRankWeaknessScore(game);
 
         if (difficulty == AIDifficulty.HARD) {
             score += advancedEval.getAdvancedPawnStructureScore(game);
@@ -99,9 +88,9 @@ public class PositionEvaluator {
             score += advancedEval.getPieceCoordinationScore(game);
         }
 
-        boolean isEndGame = isEndGame(game);
         if (isEndGame) {
             score += strategicEval.getPassedPawnBonus(game) / 2;
+            score += strategicEval.getKingTropismScore(game, true);
         } else if (difficulty == AIDifficulty.HARD) {
             score += advancedEval.getCenterControlScore(game) / 3;
         }
@@ -116,10 +105,6 @@ public class PositionEvaluator {
     /**
      * Returns true only when queens are gone AND total material is low.
      * Used for king piece-square table selection and passed-pawn bonus.
-     *
-     * Condition: NO queens on board AND total non-king material < 3000 cp.
-     * Previous (buggy): queenCount == 0 OR totalMaterial < 4000
-     *   → triggered too early in positions with rooks/minors still active.
      */
     public boolean isEndGame(Game game) {
         int total = 0;
@@ -127,7 +112,7 @@ public class PositionEvaluator {
             for (int c = 0; c < 8; c++) {
                 Piece p = game.getBoard().getBox(r, c).getPiece();
                 if (p == null || p instanceof King) continue;
-                if (p instanceof Queen) return false; // queen present → middlegame
+                if (p instanceof Queen) return false;
                 total += getPieceValue(p);
             }
         }
@@ -302,14 +287,13 @@ public class PositionEvaluator {
         return score;
     }
 
-    private int getPositionalScore(Game game) {
+    private int getPositionalScore(Game game, boolean isEndGame) {
         int score = 0;
-        boolean eg = isEndGame(game);
         for (int r = 0; r < 8; r++)
             for (int c = 0; c < 8; c++) {
                 Piece piece = game.getBoard().getBox(r, c).getPiece();
                 if (piece != null) {
-                    int v = pieceSquareTables.getScore(piece, r, c, eg);
+                    int v = pieceSquareTables.getScore(piece, r, c, isEndGame);
                     score += piece.isWhite() ? v : -v;
                 }
             }

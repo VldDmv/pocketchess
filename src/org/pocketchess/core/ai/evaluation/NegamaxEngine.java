@@ -123,7 +123,7 @@ public class NegamaxEngine {
             int nmScore = -negamax(game, depth - 1 - R, -beta, -beta + 1,
                     plyFromRoot + 1, extensionsSoFar);
             game.undoNullMove();
-            if (nmScore >= beta) return beta;
+            if (nmScore >= beta && Math.abs(nmScore) < 90_000) return beta;
         }
 
         List<Move> legalMoves = moveGenerator.generateMoves(game);
@@ -157,9 +157,11 @@ public class NegamaxEngine {
                 if (posCount >= 2) {
                     int deepScore = -negamax(game, depth - 1, -beta, -alpha,
                             plyFromRoot + 1, extensionsSoFar);
-                    int penalty = (deepScore > REPETITION_PENALTY_THRESHOLD)
-                            ? REPETITION_WARNING_PENALTY
-                            : 0;
+                    int penalty = 0;
+                    if (deepScore > REPETITION_PENALTY_THRESHOLD) {
+                        penalty = Math.max(REPETITION_WARNING_PENALTY, Math.abs(deepScore) / 3);
+                        penalty = Math.min(penalty, 800);
+                    }
                     score = deepScore - penalty;
 
                 } else {
