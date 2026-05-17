@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout('Game — PocketChess', ~{::main})}">
+<body>
+<main>
+    <input type="hidden" id="game-id" th:value="${gameId}"/>
+    <input type="hidden" id="me" th:value="${me}"/>
+    <input type="hidden" id="orientation" th:value="${orientation}"/>
+
+    <div class="game-grid">
+        <div class="board-pane">
+            <div class="clocks">
+                <div id="clock-top" class="clock">
+                    <div class="name">Opponent</div>
+                    <div class="time">—</div>
+                </div>
+                <div id="clock-bottom" class="clock active">
+                    <div class="name">You</div>
+                    <div class="time">—</div>
+                </div>
+            </div>
+            <div id="board"></div>
+        </div>
+
+        <aside class="side-pane">
+            <div id="status" class="status-bar">Loading…</div>
+
+            <div class="actions">
+                <button id="btn-resign" class="btn">Resign</button>
+                <button id="btn-draw" class="btn">Offer draw</button>
+                <button id="btn-undo" class="btn">Undo</button>
+            </div>
+
+            <div id="prompt-bar" class="status-bar" style="display:none"></div>
+
+            <div>
+                <div class="muted" style="margin-bottom:4px">Captured</div>
+                <div id="captured-top" class="captured"></div>
+                <div id="captured-bottom" class="captured"></div>
+            </div>
+
+            <div>
+                <div class="muted" style="margin-bottom:4px">Moves</div>
+                <div id="move-list" class="move-list"></div>
+            </div>
+
+            <div class="chat" id="chat" th:if="${!spectator}">
+                <div class="chat-log" id="chat-log"></div>
+                <form class="chat-input" id="chat-form">
+                    <input type="text" id="chat-text" placeholder="Say something…" maxlength="500" autocomplete="off"/>
+                    <button type="submit">Send</button>
+                </form>
+            </div>
+        </aside>
+    </div>
+
+    <div id="promotion-overlay" style="display:none">
+        <div class="promotion-card">
+            <p>Promote pawn to:</p>
+            <div class="row">
+                <button data-piece="q" class="btn primary">Queen</button>
+                <button data-piece="r" class="btn">Rook</button>
+                <button data-piece="b" class="btn">Bishop</button>
+                <button data-piece="n" class="btn">Knight</button>
+            </div>
+        </div>
+    </div>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+    <script th:inline="javascript">
+        window.__initialView = /*[[${initialView}]]*/ null;
+        window.__spectator = /*[[${spectator}]]*/ false;
+    </script>
+    <script src="/js/game.js"></script>
+</main>
+<style>
+    #promotion-overlay {
+        position: fixed; inset: 0; background: rgba(0,0,0,.6);
+        display: flex; align-items: center; justify-content: center; z-index: 100;
+    }
+    .promotion-card {
+        background: var(--panel); border: 1px solid var(--line);
+        border-radius: 8px; padding: 20px; text-align: center;
+    }
+    .promotion-card p { margin-top: 0; }
+</style>
+</body>
+</html>

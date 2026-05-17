@@ -4,7 +4,114 @@
 <body>
 <main>
     <h2>Lobby</h2>
-    <p class="muted">Stage 2 stub — lobby UI lands in Stage 4.</p>
+    <p th:if="${param.missing}" class="notice err">That game no longer exists.</p>
+    <div class="lobby">
+        <section class="panel">
+            <h3>Play vs bot</h3>
+            <form id="bot-form" class="form">
+                <div class="row">
+                    <label>Colour
+                        <select name="color">
+                            <option value="white">White</option>
+                            <option value="black">Black</option>
+                        </select>
+                    </label>
+                    <label>Variant
+                        <select name="variant">
+                            <option value="CLASSIC">Classic</option>
+                            <option value="CHESS960">Chess960</option>
+                            <option value="LAVA">Lava</option>
+                        </select>
+                    </label>
+                    <label>Difficulty
+                        <select name="difficulty">
+                            <option value="EASY">Easy</option>
+                            <option value="MEDIUM" selected>Medium</option>
+                            <option value="HARD">Hard</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="row">
+                    <label>Minutes
+                        <input type="number" name="minutes" min="1" max="180" value="5"/>
+                    </label>
+                    <label>Increment (s)
+                        <input type="number" name="increment" min="0" max="60" value="0"/>
+                    </label>
+                    <label class="row" style="margin-top:20px">
+                        <input type="checkbox" name="unlimited"> Unlimited
+                    </label>
+                </div>
+                <button type="submit" class="btn primary">Start game</button>
+            </form>
+        </section>
+
+        <section class="panel">
+            <h3>Play vs player</h3>
+            <form id="open-form" class="form">
+                <div class="row">
+                    <label>Colour
+                        <select name="color">
+                            <option value="white">White</option>
+                            <option value="black">Black</option>
+                        </select>
+                    </label>
+                    <label>Variant
+                        <select name="variant">
+                            <option value="CLASSIC">Classic</option>
+                            <option value="CHESS960">Chess960</option>
+                            <option value="LAVA">Lava</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="row">
+                    <label>Minutes
+                        <input type="number" name="minutes" min="1" max="180" value="5"/>
+                    </label>
+                    <label>Increment (s)
+                        <input type="number" name="increment" min="0" max="60" value="0"/>
+                    </label>
+                    <label class="row" style="margin-top:20px">
+                        <input type="checkbox" name="unlimited"> Unlimited
+                    </label>
+                </div>
+                <div class="row">
+                    <button type="submit" class="btn">Create open challenge</button>
+                    <button type="button" id="quick-match" class="btn primary">Quick match</button>
+                </div>
+            </form>
+        </section>
+    </div>
+
+    <section class="panel" style="margin-top:24px">
+        <div class="row between">
+            <h3 style="margin:0">Open games <span class="tag live" id="lobby-live">live</span></h3>
+            <span class="muted" id="lobby-count" th:text="${openGames.size()} + ' open'">0 open</span>
+        </div>
+        <table class="games" id="games-table">
+            <thead>
+            <tr><th>Creator</th><th>Side</th><th>Variant</th><th>Time</th><th></th></tr>
+            </thead>
+            <tbody>
+            <tr class="empty" th:if="${openGames.empty}"><td colspan="5">No open games yet — create one above.</td></tr>
+            <tr th:each="g : ${openGames}" th:data-id="${g.gameId}">
+                <td th:text="${g.creatorName}">name</td>
+                <td th:text="${g.creatorColour}">white</td>
+                <td th:text="${g.variant}">CLASSIC</td>
+                <td th:text="${g.unlimitedTime} ? 'unlimited' : (${g.baseTimeSeconds/60} + ' min + ' + ${g.incrementSeconds} + ' s')">5 min</td>
+                <td>
+                    <button class="btn join-btn"
+                            th:disabled="${g.creatorName} == ${me}"
+                            th:text="${g.creatorName} == ${me} ? 'Your game' : 'Join'">Join</button>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.6.1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+    <script src="/js/lobby.js"></script>
 </main>
 </body>
 </html>

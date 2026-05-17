@@ -11,10 +11,15 @@ import org.pocketchess.core.game.utils.FenUtils;
 import org.pocketchess.core.gamemode.GameModeType;
 import org.pocketchess.core.general.Game;
 import org.pocketchess.core.pieces.Bishop;
+import org.pocketchess.core.pieces.King;
 import org.pocketchess.core.pieces.Knight;
+import org.pocketchess.core.pieces.Pawn;
 import org.pocketchess.core.pieces.Piece;
 import org.pocketchess.core.pieces.Queen;
 import org.pocketchess.core.pieces.Rook;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Thin, headless wrapper around {@link Game} used by the online server.
@@ -60,6 +65,59 @@ public class ChessEngineAdapter {
 
     public boolean isGameOver() {
         return game.isGameOver();
+    }
+
+    /** Black pieces white has captured, as FEN letters ("p", "n", "r"...). */
+    public List<String> capturedByWhite() {
+        return toFenLetters(game.getWhiteCapturedPieces());
+    }
+
+    /** White pieces black has captured, as FEN letters ("P", "N", "R"...). */
+    public List<String> capturedByBlack() {
+        return toFenLetters(game.getBlackCapturedPieces());
+    }
+
+    /** Reverts the most recent half-move. Returns false if there is nothing to undo. */
+    public boolean undoLastHalfMove() {
+        if (game.getMoveHistory().isEmpty()) return false;
+        game.undoMove();
+        return true;
+    }
+
+    public void resign() { game.resign(); }
+
+    /**
+     * Drives the engine into {@code DRAW_AGREED}. The offline {@code offerDraw()}
+     * is a toggle that needs two invocations (offer + accept), so the session
+     * layer calls this once when both players have signalled agreement.
+     */
+    public void acceptDraw() {
+        if (!game.isDrawOffered()) game.offerDraw();
+        game.offerDraw();
+    }
+
+    /** Marks the side-to-move as having lost on time. */
+    public void flagFall() {
+        // The engine's onTimeExpired sets the appropriate WIN_ON_TIME status.
+        game.onTimeExpired(game.isWhiteTurn());
+    }
+
+    private static List<String> toFenLetters(List<Piece> pieces) {
+        List<String> out = new ArrayList<>(pieces.size());
+        for (Piece p : pieces) out.add(fenLetter(p));
+        return out;
+    }
+
+    private static String fenLetter(Piece piece) {
+        String letter;
+        if (piece instanceof Pawn) letter = "p";
+        else if (piece instanceof Knight) letter = "n";
+        else if (piece instanceof Bishop) letter = "b";
+        else if (piece instanceof Rook) letter = "r";
+        else if (piece instanceof Queen) letter = "q";
+        else if (piece instanceof King) letter = "k";
+        else letter = "?";
+        return piece.isWhite() ? letter.toUpperCase() : letter;
     }
 
     /**
