@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:fragment="layout(title, content)">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="_csrf"           th:content="${_csrf?.token}">
+    <meta name="_csrf_header"    th:content="${_csrf?.headerName}">
+    <meta name="_csrf_parameter" th:content="${_csrf?.parameterName}">
+    <title th:text="${title} ?: 'PocketChess'">PocketChess</title>
+    <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+<header class="topbar">
+    <a class="brand" href="/">♞ PocketChess</a>
+    <nav>
+        <a th:if="${#authorization.expression('isAuthenticated()')}" href="/lobby">Lobby</a>
+        <span th:if="${#authorization.expression('isAuthenticated()')}"
+              class="who"
+              sec:authentication="name">user</span>
+        <form th:if="${#authorization.expression('isAuthenticated()')}"
+              method="post" action="/logout" class="inline">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <button type="submit" class="link">Log out</button>
+        </form>
+        <a th:unless="${#authorization.expression('isAuthenticated()')}" href="/login">Log in</a>
+        <a th:unless="${#authorization.expression('isAuthenticated()')}" href="/register">Sign up</a>
+    </nav>
+</header>
+<main>
+    <th:block th:replace="${content}">content</th:block>
+</main>
+</body>
+</html>

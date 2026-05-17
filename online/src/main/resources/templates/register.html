@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout('Sign up — PocketChess', ~{::main})}">
+<body>
+<main>
+    <section class="card">
+        <h2>Create your account</h2>
+        <p th:if="${registrationError}" class="notice err" th:text="${registrationError}">err</p>
+        <form method="post" action="/register" class="form" th:object="${form}">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <label>
+                Email
+                <input type="email" th:field="*{email}" autocomplete="email" required autofocus>
+                <span class="field-error" th:errors="*{email}">err</span>
+            </label>
+            <label>
+                Display name
+                <input type="text" th:field="*{displayName}" autocomplete="nickname" required>
+                <span class="field-error" th:errors="*{displayName}">err</span>
+            </label>
+            <label>
+                Password
+                <input type="password" th:field="*{password}" autocomplete="new-password" required>
+                <span class="field-error" th:errors="*{password}">err</span>
+            </label>
+            <button type="submit" class="btn primary">Sign up</button>
+        </form>
+        <p class="hint">Already have an account? <a href="/login">Log in</a>.</p>
+    </section>
+</main>
+</body>
+</html>

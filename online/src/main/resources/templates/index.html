@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout('PocketChess — online chess', ~{::main})}">
+<body>
+<main>
+    <section class="hero">
+        <h1>PocketChess online</h1>
+        <p class="lead">
+            Play classic chess, Chess960, and Lava variant — against the bundled engine
+            or against another human in real time.
+        </p>
+        <div class="cta">
+            <a class="btn primary" href="/login">Log in</a>
+            <a class="btn" href="/register">Create account</a>
+        </div>
+        <ul class="bullets">
+            <li>Three engine difficulties — same evaluator as the desktop build.</li>
+            <li>Custom time controls with optional increment.</li>
+            <li>Undo, draw offer, resign, live chat.</li>
+        </ul>
+    </section>
+</main>
+</body>
+</html>

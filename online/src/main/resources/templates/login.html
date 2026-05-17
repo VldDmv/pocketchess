@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout('Log in — PocketChess', ~{::main})}">
+<body>
+<main>
+    <section class="card">
+        <h2>Log in</h2>
+        <p th:if="${registered}" class="notice ok">Account created — sign in below.</p>
+        <p th:if="${error}" class="notice err">Wrong credentials. Try again.</p>
+        <form method="post" action="/login" class="form">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+            <label>
+                Display name or email
+                <input type="text" name="username" autocomplete="username" required autofocus>
+            </label>
+            <label>
+                Password
+                <input type="password" name="password" autocomplete="current-password" required>
+            </label>
+            <button type="submit" class="btn primary">Sign in</button>
+        </form>
+        <div th:if="${googleEnabled}" class="oauth-block">
+            <p class="sep"><span>or</span></p>
+            <a class="btn google" href="/oauth2/authorization/google">Sign in with Google</a>
+        </div>
+        <p class="hint">No account yet? <a href="/register">Create one</a>.</p>
+    </section>
+</main>
+</body>
+</html>
