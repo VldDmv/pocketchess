@@ -39,6 +39,17 @@ public class PlayController {
         return lobbyService.openGames();
     }
 
+    @GetMapping("/pgn/{gameId}")
+    public ResponseEntity<String> pgn(@org.springframework.web.bind.annotation.PathVariable String gameId) {
+        return gameService.find(gameId)
+                .map(s -> ResponseEntity.ok()
+                        .header("Content-Type", "text/plain; charset=UTF-8")
+                        .body(s.engine().pgn(
+                                s.white() == null ? "?" : s.white().name(),
+                                s.black() == null ? "?" : s.black().name())))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     @PostMapping("/bot")
     public Map<String, String> playBot(@Valid @RequestBody BotRequest req, Principal principal) {
         String me = CurrentUser.displayNameOf(principal);

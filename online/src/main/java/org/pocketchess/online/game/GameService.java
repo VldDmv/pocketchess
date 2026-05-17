@@ -135,7 +135,7 @@ public class GameService {
         } else {
             rearmFlagFall(s);
         }
-        broadcast(s, result.uci(), soundEventFor(result));
+        broadcast(s, result.uci(), soundEventFor(s, result));
     }
 
     private void scheduleAiMove(GameSession s) {
@@ -163,7 +163,7 @@ public class GameService {
                 } else {
                     rearmFlagFall(s);
                 }
-                broadcast(s, result.uci(), soundEventFor(result));
+                broadcast(s, result.uci(), soundEventFor(s, result));
             } catch (RuntimeException e) {
                 log.error("AI failure in {}", sessionId, e);
             }
@@ -361,17 +361,23 @@ public class GameService {
         };
     }
 
-    private static String soundEventFor(MoveResult r) {
+    private static String soundEventFor(GameSession s, MoveResult r) {
         if (r == null || r.status() == null) return "move";
-        return switch (r.status()) {
-            case CHECK -> "check";
+        switch (r.status()) {
             case WHITE_WIN, BLACK_WIN,
                  WHITE_WINS_BY_RESIGNATION, BLACK_WINS_BY_RESIGNATION,
-                 WHITE_WIN_ON_TIME, BLACK_WIN_ON_TIME -> "checkmate";
+                 WHITE_WIN_ON_TIME, BLACK_WIN_ON_TIME:
+                return "checkmate";
             case STALEMATE, DRAW_THREEFOLD_REPETITION,
-                 DRAW_50_MOVES, DRAW_AGREED, DRAW_INSUFFICIENT_MATERIAL -> "draw";
-            default -> "move";
-        };
+                 DRAW_50_MOVES, DRAW_AGREED, DRAW_INSUFFICIENT_MATERIAL:
+                return "draw";
+            case CHECK:
+                return "check";
+            default:
+                if (s.engine().wasLastMoveCastling()) return "castle";
+                if (s.engine().wasLastMoveCapture())  return "capture";
+                return "move";
+        }
     }
 
     void broadcast(GameSession s, String lastMove, String soundEvent) {

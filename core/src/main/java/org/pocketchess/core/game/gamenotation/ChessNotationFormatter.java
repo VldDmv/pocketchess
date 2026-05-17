@@ -1,4 +1,4 @@
-package org.pocketchess.ui.gameframepack.notation;
+package org.pocketchess.core.game.gamenotation;
 
 import org.pocketchess.core.game.model.GameStatus;
 import org.pocketchess.core.game.moveanalyze.Move;
@@ -22,7 +22,7 @@ import java.util.Map;
  * undo performed, PGN loaded).  Identity comparison on Move objects keeps the
  * check free.
  */
-public class ChessNotationFormatter {
+public class ChessNotationFormatter implements NotationProvider {
     private final Game game;
 
     /**

@@ -45,7 +45,10 @@ class GameServiceTest {
         GameView afterHuman = views.get(0);
         assertThat(afterHuman.lastMove()).isEqualTo("e2e4");
         assertThat(afterHuman.moveHistory()).containsExactly("e2e4");
+        assertThat(afterHuman.sanHistory()).containsExactly("e4");
         assertThat(afterHuman.whiteToMove()).isFalse();
+        assertThat(afterHuman.legalMoves()).isNotEmpty();
+        assertThat(afterHuman.legalMoves()).allMatch(uci -> uci.length() == 4 || uci.length() == 5);
 
         GameView afterBot = views.get(1);
         assertThat(afterBot.moveHistory()).hasSize(2);

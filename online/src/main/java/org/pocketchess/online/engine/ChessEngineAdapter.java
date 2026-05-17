@@ -3,12 +3,16 @@ package org.pocketchess.online.engine;
 import org.pocketchess.core.ai.difficulty.AIDifficulty;
 import org.pocketchess.core.ai.difficulty.EvaluationParameters;
 import org.pocketchess.core.ai.search.AIPlayer;
+import org.pocketchess.core.ai.search.FastMoveGenerator;
+import org.pocketchess.core.game.gamenotation.ChessNotationFormatter;
+import org.pocketchess.core.game.gamenotation.PgnBuilder;
 import org.pocketchess.core.game.model.GameMode;
 import org.pocketchess.core.game.model.GameStatus;
 import org.pocketchess.core.game.model.TimeControl;
 import org.pocketchess.core.game.moveanalyze.Move;
 import org.pocketchess.core.game.utils.FenUtils;
 import org.pocketchess.core.gamemode.GameModeType;
+import org.pocketchess.core.gamemode.LavaManager;
 import org.pocketchess.core.general.Game;
 import org.pocketchess.core.pieces.Bishop;
 import org.pocketchess.core.pieces.King;
@@ -17,9 +21,11 @@ import org.pocketchess.core.pieces.Pawn;
 import org.pocketchess.core.pieces.Piece;
 import org.pocketchess.core.pieces.Queen;
 import org.pocketchess.core.pieces.Rook;
+import org.pocketchess.core.pieces.Spot;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Thin, headless wrapper around {@link Game} used by the online server.
@@ -34,10 +40,13 @@ public class ChessEngineAdapter {
 
     private final Game game;
     private final AIDifficulty aiDifficulty;
+    private final ChessNotationFormatter notationFormatter;
+    private final FastMoveGenerator moveGenerator = new FastMoveGenerator();
 
     private ChessEngineAdapter(Game game, AIDifficulty aiDifficulty) {
         this.game = game;
         this.aiDifficulty = aiDifficulty;
+        this.notationFormatter = new ChessNotationFormatter(game);
     }
 
     public static ChessEngineAdapter newClassicGame(TimeControl tc, AIDifficulty aiDifficulty) {
@@ -100,6 +109,88 @@ public class ChessEngineAdapter {
     public void flagFall() {
         // The engine's onTimeExpired sets the appropriate WIN_ON_TIME status.
         game.onTimeExpired(game.isWhiteTurn());
+    }
+
+    /** Full game history in Standard Algebraic Notation. */
+    public List<String> sanHistory() {
+        List<Move> history = game.getMoveHistory();
+        List<String> out = new ArrayList<>(history.size());
+        for (Move m : history) out.add(notationFormatter.getNotationForMove(m));
+        return out;
+    }
+
+    /** Multi-line PGN with seven-tag roster plus the move list. */
+    public String pgn(String whiteName, String blackName) {
+        return PgnBuilder.build(game, notationFormatter, whiteName, blackName);
+    }
+
+    /** Squares currently on fire. Empty list when lava mode is off. */
+    public List<String> lavaSquares() {
+        return squaresFromLava(LavaManager::getLavaSquares);
+    }
+
+    /** Squares that will burn next turn. */
+    public List<String> warningSquares() {
+        return squaresFromLava(LavaManager::getWarningSquares);
+    }
+
+    private List<String> squaresFromLava(java.util.function.Function<LavaManager, Set<Integer>> getter) {
+        if (!game.isLavaMode()) return List.of();
+        Set<Integer> encoded = getter.apply(game.getLavaManager());
+        List<String> out = new ArrayList<>(encoded.size());
+        for (int e : encoded) out.add(toSquareName(e / 8, e % 8));
+        return out;
+    }
+
+    /** Every legal half-move available to the side to move, in UCI form. */
+    public List<String> legalMoves() {
+        if (isGameOver()) return List.of();
+        List<Move> moves = moveGenerator.generateMoves(game);
+        List<String> out = new ArrayList<>(moves.size());
+        boolean seenPromo = false;
+        for (Move m : moves) {
+            if (m.start == null || m.end == null) continue;
+            boolean isPawnMove = m.pieceMoved instanceof Pawn;
+            boolean toBackRank = m.end.getX() == 0 || m.end.getX() == 7;
+            if (isPawnMove && toBackRank) {
+                // Expand into four UCI strings so the client knows promotion is required.
+                String base = uciOf(m);
+                out.add(base + "q");
+                out.add(base + "r");
+                out.add(base + "b");
+                out.add(base + "n");
+                seenPromo = true;
+            } else {
+                out.add(uciOf(m));
+            }
+        }
+        return out;
+    }
+
+    /** Square name of the king that is currently in check, or null if none. */
+    public String kingInCheckSquare() {
+        if (game.getStatus() != GameStatus.CHECK) return null;
+        Spot kingSpot = game.findKing(game.isWhiteTurn());
+        if (kingSpot == null) return null;
+        return toSquareName(kingSpot.getX(), kingSpot.getY());
+    }
+
+    public boolean wasLastMoveCapture() {
+        Move last = game.getLastMove();
+        return last != null && last.pieceKilled != null;
+    }
+
+    public boolean wasLastMoveCastling() {
+        Move last = game.getLastMove();
+        return last != null && last.wasCastlingMove;
+    }
+
+    private static String uciOf(Move m) {
+        return UciMove.fromMove(m);
+    }
+
+    private static String toSquareName(int row, int col) {
+        return "" + (char) ('a' + col) + (8 - row);
     }
 
     private static List<String> toFenLetters(List<Piece> pieces) {

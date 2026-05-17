@@ -173,3 +173,69 @@ table.games tr.empty td { text-align: center; color: var(--muted); }
 .chat-input button {
     border: 0; background: var(--panel-2); padding: 0 14px; color: var(--text); cursor: pointer;
 }
+
+/* Board overlays — selection, legal moves, last move, check, lava. */
+.board-pane { position: relative; }
+#board .square-55d63 {                                 /* chessboard.js light square */
+    position: relative;
+}
+#board .square-55d63.selected-square { box-shadow: inset 0 0 0 4px #5b9cff80; }
+#board .square-55d63.last-move-square { background-color: rgba(155, 199, 0, .35) !important; }
+#board .square-55d63.check-square {
+    background: radial-gradient(ellipse at center,
+        rgba(255, 0, 0, .85) 0%, rgba(255, 0, 0, .45) 35%, rgba(255, 0, 0, 0) 70%) !important;
+}
+#board .square-55d63.lava-square {
+    background-color: rgba(220, 50, 30, .75) !important;
+    box-shadow: inset 0 0 18px rgba(180, 20, 0, .85);
+}
+#board .square-55d63.lava-warning-square {
+    background-color: rgba(70, 130, 220, .55) !important;
+    box-shadow: inset 0 0 0 3px rgba(70, 130, 220, .9);
+}
+#board .square-55d63.legal-move-dot::after {
+    content: "";
+    position: absolute;
+    left: 50%; top: 50%;
+    width: 30%; height: 30%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, .35);
+    border-radius: 50%;
+    pointer-events: none;
+}
+#board .square-55d63.legal-move-capture::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 3px solid rgba(0, 0, 0, .35);
+    border-radius: 50%;
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+/* In-board promotion picker, lichess-style. */
+.promo-picker {
+    position: absolute;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, .4);
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.promo-picker button {
+    background: var(--panel-2);
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    width: 64px; height: 64px;
+    display: flex; align-items: center; justify-content: center;
+}
+.promo-picker button:hover { background: var(--accent); }
+.promo-picker button img { width: 100%; height: 100%; display: block; }
+.promo-cancel {
+    color: var(--muted); font-size: 18px; height: 28px;
+}
+

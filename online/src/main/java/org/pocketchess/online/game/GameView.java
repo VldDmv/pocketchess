@@ -18,19 +18,24 @@ public record GameView(
         boolean blackIsBot,
         boolean whiteToMove,
         GameStatus status,
-        String stage,                // GameSession.LifecycleStage name
+        String stage,
         long whiteMillisLeft,
         long blackMillisLeft,
         boolean unlimitedTime,
         String lastMove,
-        List<String> moveHistory,
+        List<String> moveHistory,          // UCI — used by the client for game logic
+        List<String> sanHistory,           // SAN — used for display
         List<String> capturedByWhite,
         List<String> capturedByBlack,
         String drawOfferBy,
         String undoRequestBy,
         String variant,
         String aiDifficulty,
-        String soundEvent           // "move" / "capture" / "check" / "checkmate" / "draw" / null
+        String soundEvent,                 // "move" / "capture" / "castle" / "check" / "checkmate" / "draw" / "start" / null
+        List<String> legalMoves,           // every legal half-move for the side to move, in UCI
+        List<String> lavaSquares,
+        List<String> warningSquares,
+        String kingInCheckSquare
 ) {
 
     public static GameView of(GameSession s, String lastMove, String soundEvent) {
@@ -50,13 +55,18 @@ public record GameView(
                 s.timeControl().isUnlimited(),
                 lastMove,
                 List.copyOf(s.moveHistory()),
+                s.engine().sanHistory(),
                 s.engine().capturedByWhite(),
                 s.engine().capturedByBlack(),
                 s.drawOfferBy(),
                 s.undoRequestBy(),
                 s.variant().name(),
                 s.aiDifficulty().name(),
-                soundEvent
+                soundEvent,
+                s.engine().legalMoves(),
+                s.engine().lavaSquares(),
+                s.engine().warningSquares(),
+                s.engine().kingInCheckSquare()
         );
     }
 }

@@ -6,6 +6,7 @@
     <input type="hidden" id="game-id" th:value="${gameId}"/>
     <input type="hidden" id="me" th:value="${me}"/>
     <input type="hidden" id="orientation" th:value="${orientation}"/>
+    <input type="hidden" id="spectator" th:value="${spectator}"/>
 
     <div class="game-grid">
         <div class="board-pane">
@@ -19,16 +20,21 @@
                     <div class="time">—</div>
                 </div>
             </div>
-            <div id="board"></div>
+            <div id="board-wrap" style="position: relative">
+                <div id="board"></div>
+                <div id="promo-picker" class="promo-picker" style="display:none"></div>
+            </div>
         </div>
 
         <aside class="side-pane">
             <div id="status" class="status-bar">Loading…</div>
 
             <div class="actions">
+                <button id="btn-flip"   class="btn">Flip board</button>
+                <button id="btn-pgn"    class="btn">Copy PGN</button>
+                <button id="btn-undo"   class="btn">Undo</button>
+                <button id="btn-draw"   class="btn">Offer draw</button>
                 <button id="btn-resign" class="btn">Resign</button>
-                <button id="btn-draw" class="btn">Offer draw</button>
-                <button id="btn-undo" class="btn">Undo</button>
             </div>
 
             <div id="prompt-bar" class="status-bar" style="display:none"></div>
@@ -54,18 +60,6 @@
         </aside>
     </div>
 
-    <div id="promotion-overlay" style="display:none">
-        <div class="promotion-card">
-            <p>Promote pawn to:</p>
-            <div class="row">
-                <button data-piece="q" class="btn primary">Queen</button>
-                <button data-piece="r" class="btn">Rook</button>
-                <button data-piece="b" class="btn">Bishop</button>
-                <button data-piece="n" class="btn">Knight</button>
-            </div>
-        </div>
-    </div>
-
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
@@ -73,20 +67,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
     <script th:inline="javascript">
         window.__initialView = /*[[${initialView}]]*/ null;
-        window.__spectator = /*[[${spectator}]]*/ false;
+        window.__spectator   = /*[[${spectator}]]*/ false;
     </script>
     <script src="/js/game.js"></script>
 </main>
-<style>
-    #promotion-overlay {
-        position: fixed; inset: 0; background: rgba(0,0,0,.6);
-        display: flex; align-items: center; justify-content: center; z-index: 100;
-    }
-    .promotion-card {
-        background: var(--panel); border: 1px solid var(--line);
-        border-radius: 8px; padding: 20px; text-align: center;
-    }
-    .promotion-card p { margin-top: 0; }
-</style>
 </body>
 </html>
