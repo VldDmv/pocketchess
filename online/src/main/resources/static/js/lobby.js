@@ -97,7 +97,20 @@
             } catch (err) { alert(err.message); }
         });
     }
+    function cancelHandler(btn) {
+        btn.addEventListener('click', async () => {
+            if (!confirm('Cancel your open challenge?')) return;
+            try {
+                const res = await fetch('/api/play/cancel', {
+                    method: 'POST', headers: { [csrfHeader]: csrfToken }
+                });
+                if (!res.ok) throw new Error(await res.text());
+                // The lobby will refresh via /topic/lobby; nothing to do.
+            } catch (err) { alert(err.message); }
+        });
+    }
     document.querySelectorAll('.join-btn').forEach(joinHandler);
+    document.querySelectorAll('.cancel-btn').forEach(cancelHandler);
 
     // Live updates
     const tbody = document.querySelector('#games-table tbody');
@@ -115,15 +128,19 @@
                 const tr = document.createElement('tr');
                 tr.dataset.id = e.gameId;
                 const tc = formatTc(e);
+                const mine = e.creatorName === me;
                 tr.innerHTML = `
                     <td>${escapeHtml(e.creatorName)}</td>
                     <td>${e.creatorColour}</td>
                     <td>${e.variant}</td>
                     <td>${tc}</td>
-                    <td><button class="btn join-btn" ${e.creatorName === me ? 'disabled' : ''}>${e.creatorName === me ? 'Your game' : 'Join'}</button></td>`;
+                    <td>${mine
+                        ? '<button class="btn cancel-btn">Cancel</button>'
+                        : '<button class="btn join-btn">Join</button>'}</td>`;
                 tbody.appendChild(tr);
             });
             tbody.querySelectorAll('.join-btn').forEach(joinHandler);
+            tbody.querySelectorAll('.cancel-btn').forEach(cancelHandler);
         }
         counter.textContent = (entries?.length ?? 0) + ' open';
     }

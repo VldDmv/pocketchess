@@ -115,7 +115,10 @@ public class TemporaryMoveHandler {
     /**
      * Restores king and rook to pre-castle positions.
      * undoTemporaryMove already restores the king via startSpot/endSpot,
-     * so here we only restore the rook.
+     * so here we only restore the rook — including its {@code hasMoved}
+     * flag, which {@link #executeCastlingAtomic} flipped to {@code true}.
+     * Castling is only legal when the rook hasn't moved, so resetting the
+     * flag unconditionally on undo is correct.
      */
     private void undoCastlingRook(Spot startSpot, Spot endSpot, Move move) {
         int kingDestCol = endSpot.getY();
@@ -128,8 +131,10 @@ public class TemporaryMoveHandler {
         Spot rookOrigSpot = board.getBox(startSpot.getX(), rookFromY);
         Spot rookCurSpot  = board.getBox(startSpot.getX(), rookNewY);
 
-        rookOrigSpot.setPiece(rookCurSpot.getPiece());
+        Piece rook = rookCurSpot.getPiece();
+        rookOrigSpot.setPiece(rook);
         if (rookFromY != rookNewY) rookCurSpot.setPiece(null);
+        if (rook instanceof Rook) ((Rook) rook).setHasMoved(false);
     }
 
     private void updatePieceState(Piece piece) {

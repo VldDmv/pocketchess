@@ -40,7 +40,7 @@ public class PlayController {
     }
 
     @GetMapping("/pgn/{gameId}")
-    public ResponseEntity<String> pgn(@org.springframework.web.bind.annotation.PathVariable String gameId) {
+    public ResponseEntity<String> pgn(@org.springframework.web.bind.annotation.PathVariable("gameId") String gameId) {
         return gameService.find(gameId)
                 .map(s -> ResponseEntity.ok()
                         .header("Content-Type", "text/plain; charset=UTF-8")
@@ -73,6 +73,14 @@ public class PlayController {
         GameSession s = gameService.createOpen(me, white, tc, variant);
         lobbyService.broadcastUpdate();
         return Map.of("gameId", s.id());
+    }
+
+    @PostMapping("/cancel")
+    public ResponseEntity<?> cancelMyOpenChallenge(Principal principal) {
+        String me = CurrentUser.displayNameOf(principal);
+        gameService.cancelOpenChallengesBy(me);
+        lobbyService.broadcastUpdate();
+        return ResponseEntity.ok(Map.of("cancelled", true));
     }
 
     @PostMapping("/join")
@@ -127,7 +135,7 @@ public class PlayController {
      * for the MVP this endpoint just spins up a fresh open challenge.
      */
     @PostMapping("/rematch/{gameId}")
-    public ResponseEntity<?> rematch(@org.springframework.web.bind.annotation.PathVariable String gameId,
+    public ResponseEntity<?> rematch(@org.springframework.web.bind.annotation.PathVariable("gameId") String gameId,
                                      Principal principal) {
         String me = CurrentUser.displayNameOf(principal);
         GameSession finished = gameService.find(gameId).orElse(null);

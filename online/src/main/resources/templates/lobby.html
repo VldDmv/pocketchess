@@ -126,7 +126,7 @@
             </thead>
             <tbody>
             <tr class="empty" th:if="${openGames.empty}"><td colspan="5">No open games yet — create one above.</td></tr>
-            <tr th:each="g : ${openGames}" th:data-id="${g.gameId}">
+            <tr th:each="g : ${openGames}" th:data-id="${g.gameId}" th:data-mine="${g.creatorName == me}">
                 <td th:text="${g.creatorName}">name</td>
                 <td th:text="${g.creatorColour}">white</td>
                 <td th:text="${g.variant}">CLASSIC</td>
@@ -134,9 +134,8 @@
                     ((g.baseTimeSeconds &lt; 60 ? g.baseTimeSeconds + ' s' : (g.baseTimeSeconds / 60) + ' min')
                        + (g.incrementSeconds &gt; 0 ? ' + ' + g.incrementSeconds + ' s' : ''))}">5 min</td>
                 <td>
-                    <button class="btn join-btn"
-                            th:disabled="${g.creatorName} == ${me}"
-                            th:text="${g.creatorName} == ${me} ? 'Your game' : 'Join'">Join</button>
+                    <button th:if="${g.creatorName == me}" class="btn cancel-btn">Cancel</button>
+                    <button th:unless="${g.creatorName == me}" class="btn join-btn">Join</button>
                 </td>
             </tr>
             </tbody>
