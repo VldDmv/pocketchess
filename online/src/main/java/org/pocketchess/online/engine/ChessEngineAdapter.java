@@ -96,6 +96,19 @@ public class ChessEngineAdapter {
     public void resign() { game.resign(); }
 
     /**
+     * Sets the resignation status from the specified side's point of view
+     * (offline {@code Game.resign()} only knows how to resign whoever is on
+     * move, so we flip the turn with a null move first when the resigner
+     * isn't currently on the clock).
+     */
+    public void resignBy(boolean resignerIsWhite) {
+        if (game.isWhiteTurn() != resignerIsWhite) {
+            game.makeNullMove();
+        }
+        game.resign();
+    }
+
+    /**
      * Drives the engine into {@code DRAW_AGREED}. The offline {@code offerDraw()}
      * is a toggle that needs two invocations (offer + accept), so the session
      * layer calls this once when both players have signalled agreement.

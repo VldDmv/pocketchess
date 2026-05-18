@@ -22,11 +22,38 @@
         const fd = new FormData(form);
         const o = {};
         fd.forEach((v, k) => { o[k] = v; });
-        if (!fd.has('unlimited')) o.unlimited = false; else o.unlimited = true;
-        if (o.minutes) o.minutes = parseInt(o.minutes, 10);
-        if (o.increment) o.increment = parseInt(o.increment, 10);
+
+        const preset = o.preset || '300+0';
+        let baseSeconds, increment, unlimited = false;
+        if (preset === 'unlimited') {
+            unlimited = true;
+            baseSeconds = 300;
+            increment = 0;
+        } else if (preset === 'custom') {
+            baseSeconds = parseInt(o.customSeconds || '300', 10);
+            increment   = parseInt(o.customIncrement || '0', 10);
+        } else {
+            const [b, i] = preset.split('+');
+            baseSeconds = parseInt(b, 10);
+            increment   = parseInt(i, 10);
+        }
+        delete o.preset; delete o.customSeconds; delete o.customIncrement;
+        o.baseSeconds = baseSeconds;
+        o.increment   = increment;
+        o.unlimited   = unlimited;
         return o;
     }
+
+    // Show / hide custom-tc inputs.
+    document.querySelectorAll('.preset').forEach(sel => {
+        sel.addEventListener('change', () => {
+            const form = sel.closest('form');
+            const show = sel.value === 'custom';
+            form.querySelectorAll('.custom-tc').forEach(el => {
+                el.style.display = show ? '' : 'none';
+            });
+        });
+    });
 
     function go(gameId) {
         window.location.href = '/game/' + encodeURIComponent(gameId);
@@ -87,8 +114,7 @@
             entries.forEach(e => {
                 const tr = document.createElement('tr');
                 tr.dataset.id = e.gameId;
-                const tc = e.unlimitedTime ? 'unlimited'
-                    : Math.round(e.baseTimeSeconds / 60) + ' min + ' + e.incrementSeconds + ' s';
+                const tc = formatTc(e);
                 tr.innerHTML = `
                     <td>${escapeHtml(e.creatorName)}</td>
                     <td>${e.creatorColour}</td>
@@ -100,6 +126,16 @@
             tbody.querySelectorAll('.join-btn').forEach(joinHandler);
         }
         counter.textContent = (entries?.length ?? 0) + ' open';
+    }
+
+    function formatTc(e) {
+        if (e.unlimitedTime) return 'unlimited';
+        const base = e.baseTimeSeconds;
+        const inc = e.incrementSeconds;
+        const baseStr = base < 60
+                ? base + ' s'
+                : (base % 60 === 0 ? (base / 60) + ' min' : (base / 60).toFixed(1) + ' min');
+        return inc > 0 ? `${baseStr} + ${inc} s` : baseStr;
     }
 
     function escapeHtml(s) {

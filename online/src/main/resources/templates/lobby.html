@@ -32,14 +32,30 @@
                     </label>
                 </div>
                 <div class="row">
-                    <label>Minutes
-                        <input type="number" name="minutes" min="1" max="180" value="5"/>
+                    <label>Time control
+                        <select name="preset" class="preset">
+                            <option value="15+0">15 s — bullet</option>
+                            <option value="30+0">30 s</option>
+                            <option value="60+0">1 min</option>
+                            <option value="60+1">1 + 1</option>
+                            <option value="120+1">2 + 1</option>
+                            <option value="180+0">3 min</option>
+                            <option value="180+2">3 + 2</option>
+                            <option value="300+0" selected>5 min</option>
+                            <option value="300+3">5 + 3</option>
+                            <option value="600+0">10 min</option>
+                            <option value="600+5">10 + 5</option>
+                            <option value="900+10">15 + 10</option>
+                            <option value="1800+0">30 min</option>
+                            <option value="unlimited">Unlimited</option>
+                            <option value="custom">Custom…</option>
+                        </select>
                     </label>
-                    <label>Increment (s)
-                        <input type="number" name="increment" min="0" max="60" value="0"/>
+                    <label class="custom-tc" style="display:none">Seconds
+                        <input type="number" name="customSeconds" min="10" max="7200" value="300"/>
                     </label>
-                    <label class="row" style="margin-top:20px">
-                        <input type="checkbox" name="unlimited"> Unlimited
+                    <label class="custom-tc" style="display:none">Increment
+                        <input type="number" name="customIncrement" min="0" max="60" value="0"/>
                     </label>
                 </div>
                 <button type="submit" class="btn primary">Start game</button>
@@ -65,14 +81,30 @@
                     </label>
                 </div>
                 <div class="row">
-                    <label>Minutes
-                        <input type="number" name="minutes" min="1" max="180" value="5"/>
+                    <label>Time control
+                        <select name="preset" class="preset">
+                            <option value="15+0">15 s — bullet</option>
+                            <option value="30+0">30 s</option>
+                            <option value="60+0">1 min</option>
+                            <option value="60+1">1 + 1</option>
+                            <option value="120+1">2 + 1</option>
+                            <option value="180+0">3 min</option>
+                            <option value="180+2">3 + 2</option>
+                            <option value="300+0" selected>5 min</option>
+                            <option value="300+3">5 + 3</option>
+                            <option value="600+0">10 min</option>
+                            <option value="600+5">10 + 5</option>
+                            <option value="900+10">15 + 10</option>
+                            <option value="1800+0">30 min</option>
+                            <option value="unlimited">Unlimited</option>
+                            <option value="custom">Custom…</option>
+                        </select>
                     </label>
-                    <label>Increment (s)
-                        <input type="number" name="increment" min="0" max="60" value="0"/>
+                    <label class="custom-tc" style="display:none">Seconds
+                        <input type="number" name="customSeconds" min="10" max="7200" value="300"/>
                     </label>
-                    <label class="row" style="margin-top:20px">
-                        <input type="checkbox" name="unlimited"> Unlimited
+                    <label class="custom-tc" style="display:none">Increment
+                        <input type="number" name="customIncrement" min="0" max="60" value="0"/>
                     </label>
                 </div>
                 <div class="row">
@@ -98,7 +130,9 @@
                 <td th:text="${g.creatorName}">name</td>
                 <td th:text="${g.creatorColour}">white</td>
                 <td th:text="${g.variant}">CLASSIC</td>
-                <td th:text="${g.unlimitedTime} ? 'unlimited' : (${g.baseTimeSeconds/60} + ' min + ' + ${g.incrementSeconds} + ' s')">5 min</td>
+                <td th:text="${g.unlimitedTime ? 'unlimited' :
+                    ((g.baseTimeSeconds &lt; 60 ? g.baseTimeSeconds + ' s' : (g.baseTimeSeconds / 60) + ' min')
+                       + (g.incrementSeconds &gt; 0 ? ' + ' + g.incrementSeconds + ' s' : ''))}">5 min</td>
                 <td>
                     <button class="btn join-btn"
                             th:disabled="${g.creatorName} == ${me}"

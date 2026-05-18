@@ -14,8 +14,8 @@
     const $clockTop   = document.getElementById('clock-top');
     const $clockBot   = document.getElementById('clock-bottom');
     const $chatLog    = document.getElementById('chat-log');
-    const $boardWrap  = document.getElementById('board-wrap');
-    const $promo      = document.getElementById('promo-picker');
+    const $boardWrap  = $('#board-wrap');
+    const $promo      = $('#promo-picker');
 
     const PIECE_SYMBOLS = {
         P: '♙', N: '♘', B: '♗', R: '♖', Q: '♕', K: '♔',
@@ -25,6 +25,7 @@
 
     let lastView    = window.__initialView;
     let selectedSq  = null;       // square name of the currently-selected own piece
+    let replayIndex = null;       // when non-null, the board is showing fenHistory[replayIndex]
 
     // ─────────────────────────────────────────────────────────────────────
     //  Chessboard.js
@@ -49,6 +50,7 @@
 
     function onDragStart(source, piece) {
         if (spectator || !lastView) return false;
+        if (replayIndex !== null) return false;
         if (lastView.stage !== 'ACTIVE') return false;
         if (!isMyTurn(lastView)) return false;
         const isWhitePiece = piece.startsWith('w');
@@ -64,6 +66,7 @@
 
     async function handleSquareClick(sq) {
         if (!lastView || lastView.stage !== 'ACTIVE' || !isMyTurn(lastView)) return;
+        if (replayIndex !== null) return;
         const pieceAtClicked = pieceOn(sq, lastView.fen);
 
         // If a piece is already selected, attempt the move; otherwise (re-)select.
@@ -129,7 +132,7 @@
         return new Promise((resolve) => {
             const $sq = $('#board .square-' + targetSquare);
             const sqOffset = $sq.offset();
-            const wrapOffset = $($boardWrap).offset();
+            const wrapOffset = $boardWrap.offset();
             const left = sqOffset.left - wrapOffset.left;
             const top  = sqOffset.top  - wrapOffset.top;
             const tile = $sq.width();
@@ -157,7 +160,7 @@
 
             // Click outside closes the picker.
             const escape = (e) => {
-                if (!$promo[0].contains(e.target)) close(null);
+                if (!$promo.get(0).contains(e.target)) close(null);
             };
             setTimeout(() => document.addEventListener('mousedown', escape), 0);
 
@@ -233,6 +236,7 @@
         const s = view.status;
         const mover = view.whiteToMove ? view.whiteName : view.blackName;
         if (view.stage === 'WAITING_FOR_OPPONENT') return 'Waiting for opponent to join…';
+        if (view.stage === 'ABORTED') return 'Game aborted — opponent didn’t move in time.';
         switch (s) {
             case 'ACTIVE':  return `${mover ?? '?'} to move`;
             case 'CHECK':   return `${mover ?? '?'} to move — check!`;
@@ -282,14 +286,80 @@
         $moves.innerHTML = '';
         const moves = view.sanHistory && view.sanHistory.length
                 ? view.sanHistory : (view.moveHistory || []);
+        const totalPlies = moves.length;
         for (let i = 0; i < moves.length; i += 2) {
             const row = document.createElement('div');
             row.className = 'move-row';
             const num = (i / 2) + 1;
-            row.innerHTML = `<span class="num">${num}.</span><span>${moves[i] || ''}</span><span>${moves[i+1] || ''}</span>`;
+            const numCell  = document.createElement('span'); numCell.className = 'num'; numCell.textContent = num + '.';
+            const w = document.createElement('span'); w.className = 'ply'; w.textContent = moves[i] || '';
+            const b = document.createElement('span'); b.className = 'ply'; b.textContent = moves[i + 1] || '';
+            const whitePly = i + 1;       // fenHistory index after this move
+            const blackPly = i + 2;
+            if (moves[i])     w.dataset.ply = whitePly;
+            if (moves[i + 1]) b.dataset.ply = blackPly;
+            w.addEventListener('click', () => onPlyClick(whitePly, totalPlies));
+            b.addEventListener('click', () => onPlyClick(blackPly, totalPlies));
+            row.appendChild(numCell); row.appendChild(w); row.appendChild(b);
             $moves.appendChild(row);
         }
+        // Highlight the currently-viewed ply, if any.
+        const activePly = replayIndex !== null ? replayIndex : totalPlies;
+        $moves.querySelectorAll('.ply').forEach(el => {
+            if (parseInt(el.dataset.ply || '-1', 10) === activePly) el.classList.add('active');
+        });
         $moves.scrollTop = $moves.scrollHeight;
+    }
+
+    function onPlyClick(plyIndex, totalPlies) {
+        // Clicking the latest ply (or beyond) resumes live play.
+        if (plyIndex >= totalPlies) {
+            exitReplay();
+            return;
+        }
+        if (!lastView || !lastView.fenHistory || plyIndex < 0
+                || plyIndex >= lastView.fenHistory.length) return;
+        replayIndex = plyIndex;
+        clearSelection();
+        board.position(fenBoardOnly(lastView.fenHistory[plyIndex]), true);
+        renderMoves(lastView);
+        renderHistoryBanner(lastView);
+        clearOverlays();
+        const uci = (lastView.moveHistory || [])[plyIndex - 1];
+        if (uci && uci.length >= 4) {
+            $('#board .square-' + uci.slice(0, 2)).addClass('last-move-square');
+            $('#board .square-' + uci.slice(2, 4)).addClass('last-move-square');
+        }
+    }
+
+    function exitReplay() {
+        if (replayIndex === null) return;
+        replayIndex = null;
+        if (lastView) {
+            board.position(fenBoardOnly(lastView.fen), true);
+            renderMoves(lastView);
+            renderHistoryBanner(lastView);
+            redrawOverlays();
+        }
+    }
+
+    function renderHistoryBanner(view) {
+        const $banner = document.getElementById('history-banner');
+        if (replayIndex === null) {
+            if ($banner) $banner.remove();
+            return;
+        }
+        const total = (view.sanHistory || view.moveHistory || []).length;
+        let banner = $banner;
+        if (!banner) {
+            banner = document.createElement('div');
+            banner.id = 'history-banner';
+            banner.className = 'history-banner';
+            $promptBar.insertAdjacentElement('afterend', banner);
+        }
+        banner.innerHTML = `Replay — move ${replayIndex} of ${total}.
+            <button class="btn primary" id="live-btn">Back to live</button>`;
+        document.getElementById('live-btn').onclick = exitReplay;
     }
 
     function renderCaptured(view) {
@@ -301,7 +371,7 @@
     }
 
     function renderActions(view) {
-        const finished = view.stage === 'FINISHED'
+        const finished = view.stage === 'FINISHED' || view.stage === 'ABORTED'
                 || (view.status !== 'ACTIVE' && view.status !== 'CHECK'
                     && view.status !== 'AWAITING_PROMOTION');
         const iAmInGame = view.whiteName === me || view.blackName === me;
@@ -400,8 +470,11 @@
     function applyView(view) {
         const previousStage = lastView?.stage;
         lastView = view;
-        // If the server's authoritative position changed, snap the board to it.
-        board.position(fenBoardOnly(view.fen), false);
+        // If the user is viewing history, leave the board alone — they'll click
+        // "Back to live" (or the latest move) to resume.
+        if (replayIndex === null) {
+            board.position(fenBoardOnly(view.fen), false);
+        }
 
         // Clear stale selection once the position changes (turn flipped, etc.).
         if (selectedSq) {
@@ -417,7 +490,8 @@
         renderMoves(view);
         renderCaptured(view);
         renderActions(view);
-        redrawOverlays();
+        renderHistoryBanner(view);
+        if (replayIndex === null) redrawOverlays();
 
         if (previousStage === 'WAITING_FOR_OPPONENT' && view.stage === 'ACTIVE') {
             playSound('start');

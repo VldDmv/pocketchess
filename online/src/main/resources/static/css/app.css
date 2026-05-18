@@ -155,6 +155,22 @@ table.games tr.empty td { text-align: center; color: var(--muted); }
 }
 .move-list .move-row { display: grid; grid-template-columns: 28px 1fr 1fr; gap: 6px; }
 .move-list .num { color: var(--muted); }
+.move-list .ply {
+    padding: 0 4px; border-radius: 3px; cursor: pointer;
+}
+.move-list .ply:hover { background: var(--panel-2); }
+.move-list .ply.active { background: var(--accent); color: #fff; }
+.history-banner {
+    background: var(--panel-2);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+.history-banner button { font-size: 13px; padding: 4px 10px; }
 .captured { font-size: 22px; min-height: 26px; }
 .chat {
     background: var(--panel); border: 1px solid var(--line);
@@ -180,7 +196,7 @@ table.games tr.empty td { text-align: center; color: var(--muted); }
     position: relative;
 }
 #board .square-55d63.selected-square { box-shadow: inset 0 0 0 4px #5b9cff80; }
-#board .square-55d63.last-move-square { background-color: rgba(155, 199, 0, .35) !important; }
+#board .square-55d63.last-move-square { background-color: rgba(180, 180, 190, .25) !important; }
 #board .square-55d63.check-square {
     background: radial-gradient(ellipse at center,
         rgba(255, 0, 0, .85) 0%, rgba(255, 0, 0, .45) 35%, rgba(255, 0, 0, 0) 70%) !important;

@@ -25,6 +25,7 @@ public record GameView(
         String lastMove,
         List<String> moveHistory,          // UCI — used by the client for game logic
         List<String> sanHistory,           // SAN — used for display
+        List<String> fenHistory,           // FEN per ply (ply 0 = starting position) for replay
         List<String> capturedByWhite,
         List<String> capturedByBlack,
         String drawOfferBy,
@@ -56,6 +57,7 @@ public record GameView(
                 lastMove,
                 List.copyOf(s.moveHistory()),
                 s.engine().sanHistory(),
+                List.copyOf(s.fenHistory()),
                 s.engine().capturedByWhite(),
                 s.engine().capturedByBlack(),
                 s.drawOfferBy(),

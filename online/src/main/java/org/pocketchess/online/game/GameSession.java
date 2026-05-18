@@ -20,7 +20,7 @@ import java.util.UUID;
  */
 public class GameSession {
 
-    public enum LifecycleStage { WAITING_FOR_OPPONENT, ACTIVE, FINISHED }
+    public enum LifecycleStage { WAITING_FOR_OPPONENT, ACTIVE, FINISHED, ABORTED }
 
     private final String id = UUID.randomUUID().toString();
     private final TimeControl timeControl;
@@ -28,16 +28,22 @@ public class GameSession {
     private final AIDifficulty aiDifficulty;
     private final ChessEngineAdapter engine;
     private final List<String> moveHistory = new ArrayList<>();
+    private final List<String> fenHistory = new ArrayList<>();
     private final List<ChatLine> chat = new ArrayList<>();
 
     private Player white;
     private Player black;
     private LifecycleStage stage;
 
-    /** Reference time used to decrement the active side's clock. */
+    /**
+     * Reference time used to decrement the active side's clock. The clock
+     * stays frozen at its initial value until the first move is played
+     * (lichess-style — gives both sides a moment to settle).
+     */
     private long turnStartMillis;
     private long whiteMillisLeft;
     private long blackMillisLeft;
+    private boolean clockRunning;
 
     /** Display name of the player who currently has an open draw offer; null if none. */
     private String drawOfferBy;
@@ -58,7 +64,9 @@ public class GameSession {
         long initial = tc.isUnlimited() ? Long.MAX_VALUE : tc.baseTimeSeconds() * 1000L;
         this.whiteMillisLeft = initial;
         this.blackMillisLeft = initial;
-        this.turnStartMillis = ready ? System.currentTimeMillis() : 0L;
+        this.turnStartMillis = 0L;
+        this.clockRunning = false;
+        this.fenHistory.add(engine.fen());           // ply 0 — the starting position
     }
 
     public String id() { return id; }
@@ -69,6 +77,7 @@ public class GameSession {
     public AIDifficulty aiDifficulty() { return aiDifficulty; }
     public ChessEngineAdapter engine() { return engine; }
     public List<String> moveHistory() { return moveHistory; }
+    public List<String> fenHistory() { return fenHistory; }
     public List<ChatLine> chat() { return chat; }
     public LifecycleStage stage() { return stage; }
     public String drawOfferBy() { return drawOfferBy; }
@@ -98,26 +107,31 @@ public class GameSession {
         else throw new IllegalStateException("No seat free");
         if (white != null && black != null) {
             stage = LifecycleStage.ACTIVE;
-            turnStartMillis = System.currentTimeMillis();
         }
     }
 
     void markActive() {
         stage = LifecycleStage.ACTIVE;
-        turnStartMillis = System.currentTimeMillis();
     }
 
     void markFinished() {
         stage = LifecycleStage.FINISHED;
     }
 
+    void markAborted() {
+        stage = LifecycleStage.ABORTED;
+    }
+
+    boolean isClockRunning() { return clockRunning; }
+    void setWhiteMillisLeft(long m) { this.whiteMillisLeft = m; }
+    void setBlackMillisLeft(long m) { this.blackMillisLeft = m; }
+
     /** Snapshots remaining time for the live side; called right after a move. */
     long onMoveCompleted() {
         long now = System.currentTimeMillis();
-        if (!timeControl.isUnlimited()) {
+        if (!timeControl.isUnlimited() && clockRunning) {
             long elapsed = Math.max(0, now - turnStartMillis);
-            // Time is decremented from the side that JUST moved — which is
-            // the opposite of the new "whoToMove" reported by the engine.
+            // Decrement the side that JUST moved (opposite of new whoToMove).
             if (engine.isWhiteTurn()) {
                 blackMillisLeft = Math.max(0, blackMillisLeft - elapsed)
                         + timeControl.incrementSeconds() * 1000L;
@@ -126,16 +140,18 @@ public class GameSession {
                         + timeControl.incrementSeconds() * 1000L;
             }
         }
+        // The very first move sets the clock ticking from now on.
+        clockRunning = true;
         turnStartMillis = now;
         return now;
     }
 
     /** Returns the millis-left for each side based on wall clock. */
     long[] livePresentation() {
-        long now = System.currentTimeMillis();
         long w = whiteMillisLeft;
         long b = blackMillisLeft;
-        if (stage == LifecycleStage.ACTIVE && !timeControl.isUnlimited()) {
+        if (stage == LifecycleStage.ACTIVE && clockRunning && !timeControl.isUnlimited()) {
+            long now = System.currentTimeMillis();
             long elapsed = Math.max(0, now - turnStartMillis);
             if (engine.isWhiteTurn()) w = Math.max(0, w - elapsed);
             else                      b = Math.max(0, b - elapsed);
@@ -146,6 +162,7 @@ public class GameSession {
     /** Returns how long the currently moving side has before the flag falls. */
     long flagFallDelayMillis() {
         if (timeControl.isUnlimited()) return Long.MAX_VALUE;
+        if (!clockRunning) return Long.MAX_VALUE;
         long left = engine.isWhiteTurn() ? whiteMillisLeft : blackMillisLeft;
         long now = System.currentTimeMillis();
         long elapsed = Math.max(0, now - turnStartMillis);
@@ -159,11 +176,15 @@ public class GameSession {
 
     void recordMove(MoveResult mr) {
         moveHistory.add(mr.uci());
+        fenHistory.add(mr.fen());
     }
 
     void rollbackLastMove() {
         if (!moveHistory.isEmpty()) {
             moveHistory.remove(moveHistory.size() - 1);
+        }
+        if (fenHistory.size() > 1) {
+            fenHistory.remove(fenHistory.size() - 1);
         }
     }
 

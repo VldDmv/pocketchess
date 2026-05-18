@@ -53,7 +53,7 @@ public class PlayController {
     @PostMapping("/bot")
     public Map<String, String> playBot(@Valid @RequestBody BotRequest req, Principal principal) {
         String me = CurrentUser.displayNameOf(principal);
-        TimeControl tc = timeControlOf(req.minutes(), req.increment(), req.unlimited());
+        TimeControl tc = timeControlOf(req.baseSeconds(), req.increment(), req.unlimited());
         GameModeType variant = GameModeType.valueOf(req.variant());
         AIDifficulty diff = AIDifficulty.valueOf(req.difficulty());
         boolean white = !"black".equalsIgnoreCase(req.color());
@@ -64,7 +64,7 @@ public class PlayController {
     @PostMapping("/open")
     public Map<String, String> createOpen(@Valid @RequestBody OpenRequest req, Principal principal) {
         String me = CurrentUser.displayNameOf(principal);
-        TimeControl tc = timeControlOf(req.minutes(), req.increment(), req.unlimited());
+        TimeControl tc = timeControlOf(req.baseSeconds(), req.increment(), req.unlimited());
         GameModeType variant = GameModeType.valueOf(req.variant());
         boolean white = !"black".equalsIgnoreCase(req.color());
         GameSession s = gameService.createOpen(me, white, tc, variant);
@@ -102,25 +102,25 @@ public class PlayController {
             lobbyService.broadcastUpdate();
             return Map.of("gameId", match.id());
         }
-        TimeControl tc = timeControlOf(req.minutes(), req.increment(), req.unlimited());
+        TimeControl tc = timeControlOf(req.baseSeconds(), req.increment(), req.unlimited());
         GameModeType variant = GameModeType.valueOf(req.variant());
         GameSession s = gameService.createOpen(me, true, tc, variant);
         lobbyService.broadcastUpdate();
         return Map.of("gameId", s.id());
     }
 
-    private TimeControl timeControlOf(Integer minutes, Integer increment, Boolean unlimited) {
+    private TimeControl timeControlOf(Integer baseSeconds, Integer increment, Boolean unlimited) {
         if (Boolean.TRUE.equals(unlimited)) return TimeControl.UNLIMITED;
-        int m = minutes == null ? 5 : minutes;
-        int inc = increment == null ? 0 : increment;
-        return new TimeControl(m * 60, inc);
+        int base = baseSeconds == null ? 300 : baseSeconds;        // default 5 min
+        int inc  = increment == null ? 0 : increment;
+        return new TimeControl(base, inc);
     }
 
     public record BotRequest(
             @NotBlank String color,
             @NotBlank String variant,
             @NotBlank String difficulty,
-            @Min(1) Integer minutes,
+            @Min(10) Integer baseSeconds,
             @Min(0) Integer increment,
             Boolean unlimited
     ) {}
@@ -128,7 +128,7 @@ public class PlayController {
     public record OpenRequest(
             @NotBlank String color,
             @NotBlank String variant,
-            @Min(1) Integer minutes,
+            @Min(10) Integer baseSeconds,
             @Min(0) Integer increment,
             Boolean unlimited
     ) {}

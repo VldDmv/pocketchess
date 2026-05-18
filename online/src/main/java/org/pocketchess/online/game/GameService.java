@@ -38,6 +38,12 @@ public class GameService {
             Executors.newScheduledThreadPool(2, namedDaemon("pc-ai-"));
 
     private final ConcurrentMap<String, ScheduledFuture<?>> flagFalls = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, ScheduledFuture<?>> aborts    = new ConcurrentHashMap<>();
+
+    /** First mover (white) must move within this window or the game is aborted. */
+    private static final long FIRST_MOVE_ABORT_MS  = 30_000;
+    /** After white's first move, black has this much time to play their first move. */
+    private static final long SECOND_MOVE_ABORT_MS = 15_000;
 
     public GameService(GameRegistry registry, SimpMessagingTemplate messaging) {
         this.registry = registry;
@@ -64,7 +70,7 @@ public class GameService {
         registry.put(session);
         log.info("Created PvE game {} ({} vs bot/{})", session.id(), humanName, difficulty);
 
-        rearmFlagFall(session);
+        // Clock only starts after the first move; flag-fall is armed there.
         if (session.sideToMove().bot()) scheduleAiMove(session);
         return session;
     }
@@ -91,7 +97,7 @@ public class GameService {
             throw new IllegalStateException("You created this game");
         }
         session.seatOpponent(Player.human(joinerName));
-        rearmFlagFall(session);
+        rearmAbortTimer(session);
         broadcast(session, null, "start");
         return session;
     }
@@ -132,8 +138,10 @@ public class GameService {
         if (terminal(result.status())) {
             s.markFinished();
             cancelFlagFall(s.id());
+            cancelAbortTimer(s.id());
         } else {
             rearmFlagFall(s);
+            rearmAbortTimer(s);
         }
         broadcast(s, result.uci(), soundEventFor(s, result));
     }
@@ -160,8 +168,10 @@ public class GameService {
                 if (terminal(result.status())) {
                     s.markFinished();
                     cancelFlagFall(sessionId);
+                    cancelAbortTimer(sessionId);
                 } else {
                     rearmFlagFall(s);
+                    rearmAbortTimer(s);
                 }
                 broadcast(s, result.uci(), soundEventFor(s, result));
             } catch (RuntimeException e) {
@@ -181,22 +191,11 @@ public class GameService {
             sendError(gameId, byName, "You're not in this game.");
             return;
         }
-        // The engine resigns "the side to move"; force that side to be the
-        // resigning player before calling it.
         boolean resignerIsWhite = s.white() != null && byName.equals(s.white().name());
-        if (resignerIsWhite != s.whiteToMove()) {
-            // Use a "null move" so the side-to-move matches the resigner.
-            // Simpler: set status directly via flagFall surrogate? No public API.
-            // The engine's resign() reads stateManager.isWhiteTurn(), so we have
-            // to flip it through makeNullMove(). The result still ends the game.
-            s.engine().capturedByWhite(); // no-op; left as a marker for review
-            // Apply a null move to flip the turn without changing the position.
-            s.engine().resign(); // resigns whoever is on move
-        } else {
-            s.engine().resign();
-        }
+        s.engine().resignBy(resignerIsWhite);
         s.markFinished();
         cancelFlagFall(gameId);
+        cancelAbortTimer(gameId);
         broadcast(s, null, "checkmate");
     }
 
@@ -211,6 +210,7 @@ public class GameService {
             s.engine().acceptDraw();
             s.markFinished();
             cancelFlagFall(gameId);
+            cancelAbortTimer(gameId);
             s.clearDrawOffer();
             broadcast(s, null, "draw");
         } else {
@@ -318,6 +318,7 @@ public class GameService {
         cancelFlagFall(s.id());
         if (s.timeControl().isUnlimited()) return;
         if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
+        if (!s.isClockRunning()) return;
         long delay = s.flagFallDelayMillis();
         String sessionId = s.id();
         ScheduledFuture<?> fut = scheduler.schedule(
@@ -339,9 +340,51 @@ public class GameService {
                 rearmFlagFall(s);
                 return;
             }
+            // Zero the losing side's clock before broadcasting so the UI
+            // shows 0:00 instead of "time at the previous move's snapshot".
+            if (s.engine().isWhiteTurn()) s.setWhiteMillisLeft(0);
+            else                          s.setBlackMillisLeft(0);
             s.engine().flagFall();
             s.markFinished();
             broadcast(s, null, "checkmate");
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  Abort timer — lichess-style: white must move first within 30s; once
+    //  white has moved, black has 15s to respond. PvE games never abort.
+    // ─────────────────────────────────────────────────────────────────────
+
+    private void rearmAbortTimer(GameSession s) {
+        cancelAbortTimer(s.id());
+        if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
+        if (s.white() != null && s.white().bot()) return;
+        if (s.black() != null && s.black().bot()) return;
+        if (s.isClockRunning() && s.moveHistory().size() >= 2) return;
+
+        long delay = s.moveHistory().isEmpty()
+                ? FIRST_MOVE_ABORT_MS : SECOND_MOVE_ABORT_MS;
+        String sessionId = s.id();
+        ScheduledFuture<?> fut = scheduler.schedule(
+                () -> onAbort(sessionId), delay, TimeUnit.MILLISECONDS);
+        aborts.put(sessionId, fut);
+    }
+
+    private void cancelAbortTimer(String gameId) {
+        ScheduledFuture<?> fut = aborts.remove(gameId);
+        if (fut != null) fut.cancel(false);
+    }
+
+    private void onAbort(String gameId) {
+        GameSession s = registry.find(gameId).orElse(null);
+        if (s == null) return;
+        synchronized (s) {
+            if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
+            if (s.moveHistory().size() >= 2) return;     // both played — game is on
+            s.markAborted();
+            cancelFlagFall(gameId);
+            broadcast(s, null, "draw");
+            log.info("Aborted PvP game {} — no first move", gameId);
         }
     }
 
