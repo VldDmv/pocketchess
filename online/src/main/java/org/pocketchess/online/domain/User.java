@@ -12,18 +12,12 @@ import java.time.Instant;
 
 @Entity
 @Table(name = "users",
-        uniqueConstraints = {
-                @UniqueConstraint(columnNames = "email"),
-                @UniqueConstraint(columnNames = "displayName")
-        })
+        uniqueConstraints = @UniqueConstraint(columnNames = "displayName"))
 public class User {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(nullable = false)
-    private String email;
 
     @Column(nullable = false)
     private String displayName;
@@ -43,8 +37,6 @@ public class User {
     private Instant createdAt = Instant.now();
 
     public Long getId() { return id; }
-    public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
     public String getDisplayName() { return displayName; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }
     public String getPasswordHash() { return passwordHash; }

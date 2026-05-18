@@ -16,12 +16,10 @@ public class AppUserDetailsService implements UserDetailsService {
         this.users = users;
     }
 
-    /** Accepts either the display name or the email to give players a forgiving login. */
     @Override
-    public UserDetails loadUserByUsername(String identifier) {
-        User user = users.findByDisplayName(identifier)
-                .or(() -> users.findByEmail(identifier.toLowerCase()))
-                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + identifier));
+    public UserDetails loadUserByUsername(String displayName) {
+        User user = users.findByDisplayName(displayName)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + displayName));
         if (user.getPasswordHash() == null) {
             // OAuth-only account — no form login allowed.
             throw new UsernameNotFoundException("Account has no password; sign in with Google.");

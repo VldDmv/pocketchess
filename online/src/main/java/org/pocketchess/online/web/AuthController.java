@@ -1,7 +1,6 @@
 package org.pocketchess.online.web;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -25,7 +24,7 @@ public class AuthController {
     @GetMapping("/register")
     public String registerForm(Model model) {
         if (!model.containsAttribute("form")) {
-            model.addAttribute("form", new RegisterForm("", "", ""));
+            model.addAttribute("form", new RegisterForm("", ""));
         }
         return "register";
     }
@@ -37,7 +36,7 @@ public class AuthController {
             return "register";
         }
         try {
-            userService.register(form.email(), form.displayName(), form.password());
+            userService.register(form.displayName(), form.password());
         } catch (IllegalArgumentException e) {
             model.addAttribute("registrationError", e.getMessage());
             return "register";
@@ -46,7 +45,6 @@ public class AuthController {
     }
 
     public record RegisterForm(
-            @NotBlank @Email String email,
             @NotBlank @Size(min = 3, max = 24)
             @Pattern(regexp = "^[A-Za-z0-9_\\-]+$",
                     message = "Letters, digits, '-' or '_' only.")

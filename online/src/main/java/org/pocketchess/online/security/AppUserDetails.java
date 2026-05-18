@@ -13,19 +13,16 @@ public class AppUserDetails implements UserDetails {
 
     private final Long userId;
     private final String displayName;
-    private final String email;
     private final String passwordHash;
 
     public AppUserDetails(User user) {
         this.userId = user.getId();
         this.displayName = user.getDisplayName();
-        this.email = user.getEmail();
         this.passwordHash = user.getPasswordHash() == null ? "" : user.getPasswordHash();
     }
 
     public Long getUserId() { return userId; }
     public String getDisplayName() { return displayName; }
-    public String getEmail() { return email; }
 
     @Override public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_USER"));

@@ -64,6 +64,9 @@ public class PlayController {
     @PostMapping("/open")
     public Map<String, String> createOpen(@Valid @RequestBody OpenRequest req, Principal principal) {
         String me = CurrentUser.displayNameOf(principal);
+        // Don't let the same user spam multiple open challenges — cancel any
+        // existing one before creating a new one.
+        gameService.cancelOpenChallengesBy(me);
         TimeControl tc = timeControlOf(req.baseSeconds(), req.increment(), req.unlimited());
         GameModeType variant = GameModeType.valueOf(req.variant());
         boolean white = !"black".equalsIgnoreCase(req.color());
@@ -89,7 +92,15 @@ public class PlayController {
     @PostMapping("/quick")
     public Map<String, String> quick(@Valid @RequestBody OpenRequest req, Principal principal) {
         String me = CurrentUser.displayNameOf(principal);
-        // FIFO: pick the oldest open game matching the requested variant; otherwise create a new one.
+
+        // If the caller already has an open challenge, reuse it — clicking
+        // "Quick match" twice shouldn't create duplicates.
+        GameSession mine = gameService.findOpenChallengeBy(me).orElse(null);
+        if (mine != null) {
+            return Map.of("gameId", mine.id());
+        }
+
+        // FIFO: pick the oldest open game matching the requested variant.
         GameSession match = lobbyService.openGames().stream()
                 .filter(e -> e.variant().equalsIgnoreCase(req.variant()))
                 .map(e -> gameService.find(e.gameId()).orElse(null))
@@ -107,6 +118,46 @@ public class PlayController {
         GameSession s = gameService.createOpen(me, true, tc, variant);
         lobbyService.broadcastUpdate();
         return Map.of("gameId", s.id());
+    }
+
+    /**
+     * Starts a new game with the same time control / variant as the finished
+     * game. PvE rematches keep the bot's difficulty; the human switches
+     * colours. PvP rematches require the OTHER player's confirmation, but
+     * for the MVP this endpoint just spins up a fresh open challenge.
+     */
+    @PostMapping("/rematch/{gameId}")
+    public ResponseEntity<?> rematch(@org.springframework.web.bind.annotation.PathVariable String gameId,
+                                     Principal principal) {
+        String me = CurrentUser.displayNameOf(principal);
+        GameSession finished = gameService.find(gameId).orElse(null);
+        if (finished == null) return ResponseEntity.notFound().build();
+
+        boolean meWasWhite = finished.white() != null && me.equals(finished.white().name());
+        boolean meWasBlack = finished.black() != null && me.equals(finished.black().name());
+        if (!meWasWhite && !meWasBlack) {
+            return ResponseEntity.badRequest().body(Map.of("error", "You weren't in that game."));
+        }
+
+        boolean botWasOpponent = (meWasWhite && finished.black() != null && finished.black().bot())
+                              || (meWasBlack && finished.white() != null && finished.white().bot());
+
+        if (botWasOpponent) {
+            // Flip colours for variety.
+            GameSession s = gameService.createVsBot(
+                    me, !meWasWhite,
+                    finished.timeControl(), finished.variant(),
+                    finished.aiDifficulty());
+            return ResponseEntity.ok(Map.of("gameId", s.id()));
+        }
+
+        // PvP rematch — open a fresh challenge with same TC/variant; opponent
+        // can pick it up from the lobby. Cancel any existing open one first.
+        gameService.cancelOpenChallengesBy(me);
+        GameSession s = gameService.createOpen(me, !meWasWhite,
+                finished.timeControl(), finished.variant());
+        lobbyService.broadcastUpdate();
+        return ResponseEntity.ok(Map.of("gameId", s.id()));
     }
 
     private TimeControl timeControlOf(Integer baseSeconds, Integer increment, Boolean unlimited) {

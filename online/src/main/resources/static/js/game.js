@@ -381,7 +381,12 @@
         document.getElementById('btn-draw').disabled   = !iAmInGame || finished || oppIsBot;
         document.getElementById('btn-undo').disabled   = !iAmInGame || finished || view.moveHistory.length === 0;
 
-        if (view.drawOfferBy && view.drawOfferBy !== me && !finished) {
+        if (finished && iAmInGame) {
+            showPrompt('Game over.', [
+                { id: 'btn-rematch', cls: 'btn primary', label: 'Rematch',       action: 'rematch' },
+                { id: 'btn-lobby',   cls: 'btn',         label: 'Back to lobby', action: 'lobby'   },
+            ]);
+        } else if (view.drawOfferBy && view.drawOfferBy !== me && !finished) {
             showPrompt(`<strong>${view.drawOfferBy}</strong> offers a draw.`, [
                 { id: 'accept-draw',  cls: 'btn primary', label: 'Accept',  action: 'draw/offer'  },
                 { id: 'decline-draw', cls: 'btn',         label: 'Decline', action: 'draw/decline' },
@@ -410,8 +415,29 @@
         $promptBar.innerHTML = html + ' ' +
             buttons.map(b => `<button class="${b.cls}" id="${b.id}">${b.label}</button>`).join(' ');
         buttons.forEach(b => {
-            document.getElementById(b.id).onclick = () => send(b.action);
+            document.getElementById(b.id).onclick = () => promptAction(b.action);
         });
+    }
+
+    async function promptAction(action) {
+        if (action === 'lobby') {
+            window.location.href = '/lobby';
+            return;
+        }
+        if (action === 'rematch') {
+            try {
+                const csrf = document.querySelector('meta[name="_csrf"]').content;
+                const hdr  = document.querySelector('meta[name="_csrf_header"]').content;
+                const res = await fetch('/api/play/rematch/' + encodeURIComponent(gameId), {
+                    method: 'POST', headers: { [hdr]: csrf }
+                });
+                if (!res.ok) throw new Error(await res.text());
+                const r = await res.json();
+                window.location.href = '/game/' + encodeURIComponent(r.gameId);
+            } catch (err) { alert('Rematch failed: ' + err.message); }
+            return;
+        }
+        send(action);
     }
 
     // ─────────────────────────────────────────────────────────────────────

@@ -31,10 +31,9 @@ public class GoogleOAuth2UserService extends DefaultOAuth2UserService {
     public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
         OAuth2User googleUser = super.loadUser(userRequest);
         String sub = googleUser.getAttribute("sub");
-        String email = googleUser.getAttribute("email");
         String name = googleUser.getAttribute("name");
 
-        User user = userService.upsertGoogleUser(sub, email, name);
+        User user = userService.upsertGoogleUser(sub, name);
 
         Map<String, Object> attrs = new HashMap<>(googleUser.getAttributes());
         attrs.put("displayName", user.getDisplayName());

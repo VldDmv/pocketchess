@@ -54,6 +54,25 @@ public class GameService {
         return registry.find(gameId);
     }
 
+    /** Open challenge created by {@code displayName} that is still waiting for an opponent. */
+    public java.util.Optional<GameSession> findOpenChallengeBy(String displayName) {
+        return registry.all().stream()
+                .filter(GameSession::isOpenSeat)
+                .filter(s -> (s.white() != null && displayName.equals(s.white().name()))
+                          || (s.black() != null && displayName.equals(s.black().name())))
+                .findFirst();
+    }
+
+    /** Removes any open (un-joined) challenges authored by {@code displayName}. */
+    public synchronized void cancelOpenChallengesBy(String displayName) {
+        for (GameSession s : registry.all()) {
+            if (!s.isOpenSeat()) continue;
+            boolean isCreator = (s.white() != null && displayName.equals(s.white().name()))
+                             || (s.black() != null && displayName.equals(s.black().name()));
+            if (isCreator) registry.remove(s.id());
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     //  Creation
     // ─────────────────────────────────────────────────────────────────────

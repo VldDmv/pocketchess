@@ -20,44 +20,31 @@ public class UserService {
     }
 
     @Transactional
-    public User register(String email, String displayName, String rawPassword) {
-        String normalisedEmail = email.trim().toLowerCase();
+    public User register(String displayName, String rawPassword) {
         String normalisedName = displayName.trim();
-        if (users.existsByEmail(normalisedEmail)) {
-            throw new IllegalArgumentException("Email is already in use.");
-        }
         if (users.existsByDisplayName(normalisedName)) {
             throw new IllegalArgumentException("Display name is already taken.");
         }
         User u = new User();
-        u.setEmail(normalisedEmail);
         u.setDisplayName(normalisedName);
         u.setPasswordHash(passwordEncoder.encode(rawPassword));
         return users.save(u);
     }
 
+    /**
+     * Looks up an existing Google account by {@code sub}, creating one if
+     * absent. Display name defaults to the Google profile name; a numeric
+     * suffix is appended on collision.
+     */
     @Transactional
-    public User upsertGoogleUser(String googleSub, String email, String name) {
+    public User upsertGoogleUser(String googleSub, String preferredName) {
         Optional<User> existing = users.findByGoogleSub(googleSub);
         if (existing.isPresent()) return existing.get();
 
-        // Link by email if a local account already uses it.
-        Optional<User> byEmail = users.findByEmail(email.toLowerCase());
-        if (byEmail.isPresent()) {
-            User u = byEmail.get();
-            u.setGoogleSub(googleSub);
-            return u;
-        }
-
         User u = new User();
-        u.setEmail(email.toLowerCase());
-        u.setDisplayName(uniqueDisplayName(name == null ? email.split("@")[0] : name));
+        u.setDisplayName(uniqueDisplayName(preferredName == null ? "player" : preferredName));
         u.setGoogleSub(googleSub);
         return users.save(u);
-    }
-
-    public Optional<User> findByEmail(String email) {
-        return users.findByEmail(email.trim().toLowerCase());
     }
 
     public Optional<User> findByDisplayName(String name) {

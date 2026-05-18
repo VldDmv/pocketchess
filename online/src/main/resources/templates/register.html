@@ -9,13 +9,8 @@
         <form method="post" action="/register" class="form" th:object="${form}">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
             <label>
-                Email
-                <input type="email" th:field="*{email}" autocomplete="email" required autofocus>
-                <span class="field-error" th:errors="*{email}">err</span>
-            </label>
-            <label>
                 Display name
-                <input type="text" th:field="*{displayName}" autocomplete="nickname" required>
+                <input type="text" th:field="*{displayName}" autocomplete="nickname" required autofocus>
                 <span class="field-error" th:errors="*{displayName}">err</span>
             </label>
             <label>
