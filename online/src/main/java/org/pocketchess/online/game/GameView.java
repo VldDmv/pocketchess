@@ -30,6 +30,8 @@ public record GameView(
         List<String> capturedByBlack,
         String drawOfferBy,
         String undoRequestBy,
+        String rematchOfferBy,
+        String rematchToGameId,
         String variant,
         String aiDifficulty,
         String soundEvent,                 // "move" / "capture" / "castle" / "check" / "checkmate" / "draw" / "start" / null
@@ -62,6 +64,8 @@ public record GameView(
                 s.engine().capturedByBlack(),
                 s.drawOfferBy(),
                 s.undoRequestBy(),
+                s.rematchOfferBy(),
+                s.rematchToGameId(),
                 s.variant().name(),
                 s.aiDifficulty().name(),
                 soundEvent,

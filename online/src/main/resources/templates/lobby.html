@@ -107,10 +107,7 @@
                         <input type="number" name="customIncrement" min="0" max="60" value="0"/>
                     </label>
                 </div>
-                <div class="row">
-                    <button type="submit" class="btn">Create open challenge</button>
-                    <button type="button" id="quick-match" class="btn primary">Quick match</button>
-                </div>
+                <button type="submit" class="btn primary">Create open challenge</button>
             </form>
         </section>
     </div>
@@ -118,15 +115,31 @@
     <section class="panel" style="margin-top:24px">
         <div class="row between">
             <h3 style="margin:0">Open games <span class="tag live" id="lobby-live">live</span></h3>
-            <span class="muted" id="lobby-count" th:text="${openGames.size()} + ' open'">0 open</span>
+            <div class="row" style="gap:10px; align-items:center">
+                <label class="muted" style="font-size:13px">Filter
+                    <select id="category-filter">
+                        <option value="ALL" selected>All</option>
+                        <option value="BULLET">Bullet</option>
+                        <option value="BLITZ">Blitz</option>
+                        <option value="RAPID">Rapid</option>
+                        <option value="CLASSICAL">Classical</option>
+                        <option value="UNLIMITED">Unlimited</option>
+                    </select>
+                </label>
+                <span class="muted" id="lobby-count" th:text="${openGames.size()} + ' open'">0 open</span>
+            </div>
         </div>
         <table class="games" id="games-table">
             <thead>
-            <tr><th>Creator</th><th>Side</th><th>Variant</th><th>Time</th><th></th></tr>
+            <tr><th>Creator</th><th>Side</th><th>Variant</th><th>Time</th><th>Category</th><th></th></tr>
             </thead>
             <tbody>
-            <tr class="empty" th:if="${openGames.empty}"><td colspan="5">No open games yet — create one above.</td></tr>
-            <tr th:each="g : ${openGames}" th:data-id="${g.gameId}" th:data-mine="${g.creatorName == me}">
+            <tr class="empty" th:if="${openGames.empty}"><td colspan="6">No open games yet — create one above.</td></tr>
+            <tr th:each="g : ${openGames}"
+                th:data-id="${g.gameId}"
+                th:data-mine="${g.creatorName == me}"
+                th:data-category="${g.category}"
+                th:classappend="${g.creatorName == me} ? 'mine' : ''">
                 <td th:text="${g.creatorName}">name</td>
                 <td th:text="${g.creatorColour}">white</td>
                 <td th:text="${g.variant}">CLASSIC</td>
@@ -134,7 +147,13 @@
                     ((g.baseTimeSeconds &lt; 60 ? g.baseTimeSeconds + ' s' : (g.baseTimeSeconds / 60) + ' min')
                        + (g.incrementSeconds &gt; 0 ? ' + ' + g.incrementSeconds + ' s' : ''))}">5 min</td>
                 <td>
-                    <button th:if="${g.creatorName == me}" class="btn cancel-btn">Cancel</button>
+                    <span class="category-pill" th:classappend="'cat-' + ${g.category}" th:text="${g.category}">BLITZ</span>
+                </td>
+                <td>
+                    <th:block th:if="${g.creatorName == me}">
+                        <a class="btn primary" th:href="@{'/game/' + ${g.gameId}}">Resume</a>
+                        <button class="btn cancel-btn">Cancel</button>
+                    </th:block>
                     <button th:unless="${g.creatorName == me}" class="btn join-btn">Join</button>
                 </td>
             </tr>

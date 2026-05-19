@@ -49,6 +49,10 @@ public class GameSession {
     private String drawOfferBy;
     /** Display name of the player who currently has an open undo request; null if none. */
     private String undoRequestBy;
+    /** Display name of the player who currently has an open rematch offer; null if none. */
+    private String rematchOfferBy;
+    /** New game id if the rematch was accepted — clients use it to redirect. */
+    private String rematchToGameId;
 
     GameSession(Player white, Player black,
                 TimeControl tc, GameModeType variant, AIDifficulty aiDifficulty) {
@@ -81,6 +85,8 @@ public class GameSession {
     public List<ChatLine> chat() { return chat; }
     public LifecycleStage stage() { return stage; }
     public String drawOfferBy() { return drawOfferBy; }
+    public String rematchOfferBy() { return rematchOfferBy; }
+    public String rematchToGameId() { return rematchToGameId; }
     public String undoRequestBy() { return undoRequestBy; }
 
     public boolean whiteToMove() { return engine.isWhiteTurn(); }
@@ -171,8 +177,11 @@ public class GameSession {
 
     void setDrawOfferBy(String name) { this.drawOfferBy = name; }
     void setUndoRequestBy(String name) { this.undoRequestBy = name; }
+    void setRematchOfferBy(String name) { this.rematchOfferBy = name; }
+    void setRematchToGameId(String id) { this.rematchToGameId = id; }
     void clearDrawOffer() { this.drawOfferBy = null; }
     void clearUndoRequest() { this.undoRequestBy = null; }
+    void clearRematchOffer() { this.rematchOfferBy = null; }
 
     void recordMove(MoveResult mr) {
         moveHistory.add(mr.uci());

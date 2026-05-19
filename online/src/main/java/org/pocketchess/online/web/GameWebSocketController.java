@@ -56,6 +56,16 @@ public class GameWebSocketController {
         gameService.declineUndo(gameId, CurrentUser.displayNameOf(principal));
     }
 
+    @MessageMapping("/game/{id}/rematch/offer")
+    public void onRematchOffer(@DestinationVariable("id") String gameId, Principal principal) {
+        gameService.offerRematch(gameId, CurrentUser.displayNameOf(principal));
+    }
+
+    @MessageMapping("/game/{id}/rematch/decline")
+    public void onRematchDecline(@DestinationVariable("id") String gameId, Principal principal) {
+        gameService.declineRematch(gameId, CurrentUser.displayNameOf(principal));
+    }
+
     @MessageMapping("/game/{id}/chat")
     public void onChat(@DestinationVariable("id") String gameId,
                        @Payload Messages.ChatRequest req,

@@ -115,9 +115,16 @@ public class GameService {
         if (session.black() != null && session.black().name().equals(joinerName)) {
             throw new IllegalStateException("You created this game");
         }
+        // Accepting a challenge implies the joiner is no longer waiting on
+        // any open challenge of their own — drop those so the lobby stays clean.
+        cancelOpenChallengesBy(joinerName);
         session.seatOpponent(Player.human(joinerName));
         rearmAbortTimer(session);
         broadcast(session, null, "start");
+        // Push redirect to both seats — the creator may still be sitting in
+        // the lobby (they don't get the /topic/game/{id} broadcast there).
+        notifyRedirect(session.white(), session.id());
+        notifyRedirect(session.black(), session.id());
         return session;
     }
 
@@ -252,9 +259,11 @@ public class GameService {
     }
 
     /**
-     * Requests an undo. In PVE the request is granted unconditionally and the
-     * previous half-move pair (player + bot) is reverted. In PVP it requires
-     * the opponent's consent.
+     * Requests an undo. In PvE the request is granted unconditionally;
+     * the bot's last reply plus the human's preceding move are reverted
+     * so the player can re-think their decision. In PvP the request is
+     * forwarded to the opponent and only one half-move (the most recent)
+     * is reverted on accept.
      */
     public synchronized void requestUndo(String gameId, String byName) {
         GameSession s = registry.find(gameId).orElseThrow();
@@ -262,16 +271,10 @@ public class GameService {
         if (s.playerByName(byName) == null) return;
         if (s.moveHistory().isEmpty()) return;
 
-        boolean opponentIsBot =
-                (s.white() != null && byName.equals(s.white().name()) && s.black() != null && s.black().bot())
-              ||(s.black() != null && byName.equals(s.black().name()) && s.white() != null && s.white().bot());
-
-        if (opponentIsBot) {
-            // Revert until it's the requesting player's turn again.
-            undoUntilPlayersTurn(s, byName);
+        if (opponentIsBot(s, byName)) {
+            performUndo(s, 2);
             return;
         }
-        // PVP: ask the opponent.
         if (byName.equals(s.undoRequestBy())) return;
         s.setUndoRequestBy(byName);
         broadcast(s, null, null);
@@ -282,9 +285,8 @@ public class GameService {
         if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
         if (s.undoRequestBy() == null) return;
         if (byName.equals(s.undoRequestBy())) return;
-        String requester = s.undoRequestBy();
         s.clearUndoRequest();
-        undoUntilPlayersTurn(s, requester);
+        performUndo(s, 1);
     }
 
     public synchronized void declineUndo(String gameId, String byName) {
@@ -295,26 +297,105 @@ public class GameService {
         broadcast(s, null, null);
     }
 
-    private void undoUntilPlayersTurn(GameSession s, String playerName) {
-        Player target = s.playerByName(playerName);
-        if (target == null) return;
-        boolean targetIsWhite = s.white() != null && target.name().equals(s.white().name());
-        int safety = 4;
-        while (safety-- > 0 && !s.moveHistory().isEmpty() && s.whiteToMove() != targetIsWhite) {
-            if (s.engine().undoLastHalfMove()) s.rollbackLastMove();
-            else break;
+    /** Reverts exactly {@code plies} half-moves (or as many as are present). */
+    private void performUndo(GameSession s, int plies) {
+        int undone = 0;
+        while (undone < plies && !s.moveHistory().isEmpty()) {
+            if (!s.engine().undoLastHalfMove()) break;
+            s.rollbackLastMove();
+            undone++;
         }
-        // Also revert the player's own last move if their turn is current — they
-        // want to retake. Undo at least one half-move pair (or single in opener).
-        if (s.whiteToMove() == targetIsWhite && !s.moveHistory().isEmpty()) {
-            if (s.engine().undoLastHalfMove()) s.rollbackLastMove();
-            if (!s.moveHistory().isEmpty() && s.whiteToMove() != targetIsWhite) {
-                if (s.engine().undoLastHalfMove()) s.rollbackLastMove();
-            }
-        }
+        // Clock continues from now; treat as a fresh turn start.
         s.onMoveCompleted();
         rearmFlagFall(s);
         broadcast(s, null, null);
+    }
+
+    private boolean opponentIsBot(GameSession s, String me) {
+        if (s.white() != null && me.equals(s.white().name())) {
+            return s.black() != null && s.black().bot();
+        }
+        if (s.black() != null && me.equals(s.black().name())) {
+            return s.white() != null && s.white().bot();
+        }
+        return false;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  Rematch — symmetric offer/accept like draw, but only after the
+    //  current game has ended. PvE rematches finalise immediately.
+    // ─────────────────────────────────────────────────────────────────────
+
+    public synchronized void offerRematch(String gameId, String byName) {
+        GameSession s = registry.find(gameId).orElseThrow();
+        if (s.stage() != GameSession.LifecycleStage.FINISHED
+                && s.stage() != GameSession.LifecycleStage.ABORTED) return;
+        if (s.playerByName(byName) == null) return;
+        if (s.rematchToGameId() != null) return;     // already finalised
+
+        if (opponentIsBot(s, byName)) {
+            finaliseRematch(s, byName);
+            return;
+        }
+        if (s.rematchOfferBy() != null && !s.rematchOfferBy().equals(byName)) {
+            // Other side already offered — clicking now accepts.
+            finaliseRematch(s, byName);
+            return;
+        }
+        s.setRematchOfferBy(byName);
+        broadcast(s, null, null);
+    }
+
+    public synchronized void declineRematch(String gameId, String byName) {
+        GameSession s = registry.find(gameId).orElseThrow();
+        if (s.rematchOfferBy() == null) return;
+        if (byName.equals(s.rematchOfferBy())) return;
+        s.clearRematchOffer();
+        broadcast(s, null, null);
+    }
+
+    private void finaliseRematch(GameSession finished, String acceptedBy) {
+        Player whiteOld = finished.white();
+        Player blackOld = finished.black();
+        boolean acceptedByWhite = whiteOld != null && acceptedBy.equals(whiteOld.name());
+
+        GameSession fresh;
+        if (whiteOld != null && whiteOld.bot()) {
+            // Bot was white — flip seats so the human plays the other colour next.
+            String human = blackOld.name();
+            fresh = createVsBot(human, true, finished.timeControl(),
+                    finished.variant(), finished.aiDifficulty());
+        } else if (blackOld != null && blackOld.bot()) {
+            String human = whiteOld.name();
+            fresh = createVsBot(human, false, finished.timeControl(),
+                    finished.variant(), finished.aiDifficulty());
+        } else {
+            // PvP: swap colours so the other side plays white next.
+            Player newWhite = acceptedByWhite ? blackOld : whiteOld;
+            Player newBlack = acceptedByWhite ? whiteOld : blackOld;
+            fresh = new GameSession(newWhite, newBlack,
+                    finished.timeControl(), finished.variant(),
+                    finished.aiDifficulty());
+            registry.put(fresh);
+            log.info("Rematch PvP game {} ({} vs {})",
+                    fresh.id(), newWhite.name(), newBlack.name());
+        }
+
+        finished.setRematchToGameId(fresh.id());
+        finished.clearRematchOffer();
+        broadcast(finished, null, null);
+
+        // Push direct redirects to both seats so their game pages navigate
+        // even if the broadcast subscription was dropped.
+        notifyRedirect(whiteOld, fresh.id());
+        notifyRedirect(blackOld, fresh.id());
+    }
+
+    private void notifyRedirect(Player p, String gameId) {
+        if (p == null || p.bot()) return;
+        messaging.convertAndSendToUser(p.name(),
+                "/queue/redirect",
+                java.util.Map.of("gameId", gameId));
     }
 
     public synchronized void postChat(String gameId, String byName, String text) {

@@ -381,11 +381,25 @@
         document.getElementById('btn-draw').disabled   = !iAmInGame || finished || oppIsBot;
         document.getElementById('btn-undo').disabled   = !iAmInGame || finished || view.moveHistory.length === 0;
 
+        // ── Game-over panel: rematch flow + lobby ────────────────────────
         if (finished && iAmInGame) {
-            showPrompt('Game over.', [
-                { id: 'btn-rematch', cls: 'btn primary', label: 'Rematch',       action: 'rematch' },
-                { id: 'btn-lobby',   cls: 'btn',         label: 'Back to lobby', action: 'lobby'   },
-            ]);
+            if (view.rematchOfferBy && view.rematchOfferBy !== me) {
+                showPrompt(`<strong>${view.rematchOfferBy}</strong> wants a rematch.`, [
+                    { id: 'rematch-accept',  cls: 'btn primary', label: 'Accept',        action: 'rematch/offer'   },
+                    { id: 'rematch-decline', cls: 'btn',         label: 'Decline',       action: 'rematch/decline' },
+                    { id: 'btn-lobby',       cls: 'btn',         label: 'Back to lobby', action: 'lobby'           },
+                ]);
+            } else if (view.rematchOfferBy === me) {
+                showPrompt('Rematch offer sent — waiting for opponent…', [
+                    { id: 'rematch-cancel', cls: 'btn',         label: 'Cancel offer',  action: 'rematch/decline' },
+                    { id: 'btn-lobby',      cls: 'btn',         label: 'Back to lobby', action: 'lobby'           },
+                ]);
+            } else {
+                showPrompt('Game over.', [
+                    { id: 'btn-rematch', cls: 'btn primary', label: 'Rematch',       action: 'rematch/offer' },
+                    { id: 'btn-lobby',   cls: 'btn',         label: 'Back to lobby', action: 'lobby'         },
+                ]);
+            }
         } else if (view.drawOfferBy && view.drawOfferBy !== me && !finished) {
             showPrompt(`<strong>${view.drawOfferBy}</strong> offers a draw.`, [
                 { id: 'accept-draw',  cls: 'btn primary', label: 'Accept',  action: 'draw/offer'  },
@@ -424,19 +438,7 @@
             window.location.href = '/lobby';
             return;
         }
-        if (action === 'rematch') {
-            try {
-                const csrf = document.querySelector('meta[name="_csrf"]').content;
-                const hdr  = document.querySelector('meta[name="_csrf_header"]').content;
-                const res = await fetch('/api/play/rematch/' + encodeURIComponent(gameId), {
-                    method: 'POST', headers: { [hdr]: csrf }
-                });
-                if (!res.ok) throw new Error(await res.text());
-                const r = await res.json();
-                window.location.href = '/game/' + encodeURIComponent(r.gameId);
-            } catch (err) { alert('Rematch failed: ' + err.message); }
-            return;
-        }
+        // All other actions are STOMP messages to /app/game/{id}/{action}.
         send(action);
     }
 
@@ -453,11 +455,28 @@
         draw:      new Audio('/sounds/draw.wav'),
         start:     new Audio('/sounds/start.wav'),
     };
+    let soundEnabled = localStorage.getItem('pc.sound') !== 'off';
+
     function playSound(name) {
-        if (!name) return;
+        if (!name || !soundEnabled) return;
         const a = sounds[name];
         if (a) { a.currentTime = 0; a.play().catch(() => {}); }
     }
+
+    function refreshSoundButton() {
+        const b = document.getElementById('btn-sound');
+        if (!b) return;
+        b.textContent = soundEnabled ? '🔊' : '🔇';
+        b.title = soundEnabled ? 'Mute sounds' : 'Unmute sounds';
+        b.setAttribute('aria-label', b.title);
+    }
+    document.getElementById('btn-sound')?.addEventListener('click', () => {
+        soundEnabled = !soundEnabled;
+        localStorage.setItem('pc.sound', soundEnabled ? 'on' : 'off');
+        refreshSoundButton();
+        if (soundEnabled) playSound('move');     // audible feedback
+    });
+    refreshSoundButton();
 
     // ─────────────────────────────────────────────────────────────────────
     //  FEN helpers
@@ -496,6 +515,11 @@
     function applyView(view) {
         const previousStage = lastView?.stage;
         lastView = view;
+        // Rematch finalised: server points us to the fresh game — both seats redirect.
+        if (view.rematchToGameId) {
+            window.location.href = '/game/' + encodeURIComponent(view.rematchToGameId);
+            return;
+        }
         // If the user is viewing history, leave the board alone — they'll click
         // "Back to live" (or the latest move) to resume.
         if (replayIndex === null) {
@@ -569,6 +593,13 @@
             const e = JSON.parse(msg.body);
             $status.textContent = '⚠ ' + e.reason;
             if (lastView) board.position(fenBoardOnly(lastView.fen), true);
+        });
+        // Personal redirect — used by the server for rematch acceptance.
+        stomp.subscribe('/user/queue/redirect', msg => {
+            const r = JSON.parse(msg.body);
+            if (r.gameId && r.gameId !== gameId) {
+                window.location.href = '/game/' + encodeURIComponent(r.gameId);
+            }
         });
     };
     stomp.activate();

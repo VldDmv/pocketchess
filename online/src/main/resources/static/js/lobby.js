@@ -2,6 +2,9 @@
     const csrfToken = document.querySelector('meta[name="_csrf"]').content;
     const csrfHeader = document.querySelector('meta[name="_csrf_header"]').content;
     const me = document.querySelector('.topbar .who')?.textContent ?? '';
+    const filter = document.getElementById('category-filter');
+
+    let latestEntries = null;   // last server payload, before filtering
 
     function jsonHeaders() {
         return { 'Content-Type': 'application/json', [csrfHeader]: csrfToken };
@@ -75,14 +78,6 @@
         } catch (err) { alert(err.message); }
     });
 
-    document.getElementById('quick-match').addEventListener('click', async () => {
-        const form = document.getElementById('open-form');
-        try {
-            const r = await postJson('/api/play/quick', readForm(form));
-            go(r.gameId);
-        } catch (err) { alert(err.message); }
-    });
-
     function joinHandler(btn) {
         btn.addEventListener('click', async () => {
             const id = btn.closest('tr').dataset.id;
@@ -117,32 +112,53 @@
     const counter = document.getElementById('lobby-count');
 
     function render(entries) {
+        latestEntries = entries;
+        const filterValue = filter ? filter.value : 'ALL';
+        const filtered = (entries || []).filter(e =>
+            filterValue === 'ALL' || e.category === filterValue);
+        // Sort: my row first, then by category bucket (server already sorted
+        // by category — we just bubble mine up).
+        filtered.sort((a, b) => {
+            const am = a.creatorName === me ? 0 : 1;
+            const bm = b.creatorName === me ? 0 : 1;
+            return am - bm;
+        });
+
         tbody.innerHTML = '';
-        if (!entries || entries.length === 0) {
+        if (filtered.length === 0) {
             const tr = document.createElement('tr');
             tr.className = 'empty';
-            tr.innerHTML = '<td colspan="5">No open games yet — create one above.</td>';
+            tr.innerHTML = '<td colspan="6">No open games — create one above.</td>';
             tbody.appendChild(tr);
         } else {
-            entries.forEach(e => {
+            filtered.forEach(e => {
                 const tr = document.createElement('tr');
                 tr.dataset.id = e.gameId;
+                tr.dataset.category = e.category;
+                if (e.creatorName === me) tr.className = 'mine';
                 const tc = formatTc(e);
                 const mine = e.creatorName === me;
+                const actions = mine
+                    ? `<a class="btn primary" href="/game/${e.gameId}">Resume</a>
+                       <button class="btn cancel-btn">Cancel</button>`
+                    : `<button class="btn join-btn">Join</button>`;
                 tr.innerHTML = `
                     <td>${escapeHtml(e.creatorName)}</td>
                     <td>${e.creatorColour}</td>
                     <td>${e.variant}</td>
                     <td>${tc}</td>
-                    <td>${mine
-                        ? '<button class="btn cancel-btn">Cancel</button>'
-                        : '<button class="btn join-btn">Join</button>'}</td>`;
+                    <td><span class="category-pill cat-${e.category}">${e.category}</span></td>
+                    <td>${actions}</td>`;
                 tbody.appendChild(tr);
             });
             tbody.querySelectorAll('.join-btn').forEach(joinHandler);
             tbody.querySelectorAll('.cancel-btn').forEach(cancelHandler);
         }
-        counter.textContent = (entries?.length ?? 0) + ' open';
+        counter.textContent = ((entries || []).length) + ' open';
+    }
+
+    if (filter) {
+        filter.addEventListener('change', () => render(latestEntries || []));
     }
 
     function formatTc(e) {
@@ -167,6 +183,11 @@
     });
     client.onConnect = () => {
         client.subscribe('/topic/lobby', msg => render(JSON.parse(msg.body)));
+        // Server pushes here when someone joins your challenge or accepts a rematch.
+        client.subscribe('/user/queue/redirect', msg => {
+            const r = JSON.parse(msg.body);
+            if (r.gameId) go(r.gameId);
+        });
     };
     client.activate();
 })();
