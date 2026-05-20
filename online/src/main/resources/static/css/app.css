@@ -137,6 +137,18 @@ table.games td a.btn { display: inline-block; padding: 6px 10px; }
 .category-pill.cat-RAPID     { color: #6ad28a; }
 .category-pill.cat-CLASSICAL { color: #5b9cff; }
 .category-pill.cat-UNLIMITED { color: #c9b1ff; }
+
+.my-games-panel {
+    margin-bottom: 18px;
+    background: linear-gradient(to right,
+        rgba(91, 156, 255, .08), rgba(91, 156, 255, .02));
+    border-color: rgba(91, 156, 255, .35);
+}
+.my-games-panel .tag {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+}
 @media (max-width: 600px) {
     table.games th:nth-child(2),
     table.games td:nth-child(2) { display: none; }   /* hide "Side" on narrow screens */

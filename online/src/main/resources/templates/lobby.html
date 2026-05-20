@@ -5,6 +5,30 @@
 <main>
     <h2>Lobby</h2>
     <p th:if="${param.missing}" class="notice err">That game no longer exists.</p>
+
+    <section th:if="${!myActiveGames.empty}" class="panel my-games-panel">
+        <div class="row between">
+            <h3 style="margin:0">Your games <span class="tag" th:text="${myActiveGames.size()}">0</span></h3>
+            <span class="muted" style="font-size:12px">Pick up where you left off.</span>
+        </div>
+        <table class="games">
+            <thead>
+            <tr><th>Opponent</th><th>Variant</th><th>Time</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="g : ${myActiveGames}">
+                <td th:text="${g.opponentName}">opp</td>
+                <td th:text="${g.variant}">CLASSIC</td>
+                <td th:text="${g.unlimitedTime ? 'unlimited' :
+                    ((g.baseTimeSeconds &lt; 60 ? g.baseTimeSeconds + ' s' : (g.baseTimeSeconds / 60) + ' min')
+                       + (g.incrementSeconds &gt; 0 ? ' + ' + g.incrementSeconds + ' s' : ''))}">5 min</td>
+                <td th:text="${g.stage}">In progress</td>
+                <td><a class="btn primary" th:href="@{'/game/' + ${g.gameId}}">Resume</a></td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
     <div class="lobby">
         <section class="panel">
             <h3>Play vs bot</h3>

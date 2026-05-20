@@ -232,11 +232,27 @@
         return view.whiteToMove === (myColour === 'white');
     }
 
+    /** Seconds the opponent has left to reconnect, or null when they're online. */
+    function disconnectedOpponentSecondsLeft(view) {
+        if (!view) return null;
+        const oppOfflineSince = (myColour === 'white')
+                ? view.blackDisconnectedAt : view.whiteDisconnectedAt;
+        if (!oppOfflineSince) return null;
+        const grace = view.disconnectForfeitMillis || 120000;
+        const elapsed = Date.now() - oppOfflineSince;
+        return Math.max(0, Math.ceil((grace - elapsed) / 1000));
+    }
+
     function statusText(view) {
         const s = view.status;
         const mover = view.whiteToMove ? view.whiteName : view.blackName;
         if (view.stage === 'WAITING_FOR_OPPONENT') return 'Waiting for opponent to join…';
         if (view.stage === 'ABORTED') return 'Game aborted — opponent didn’t move in time.';
+        // Live "opponent disconnected — Xs to reconnect" banner.
+        const disco = disconnectedOpponentSecondsLeft(view);
+        if (disco !== null) {
+            return `Opponent disconnected — ${disco}s to reconnect.`;
+        }
         switch (s) {
             case 'ACTIVE':  return `${mover ?? '?'} to move`;
             case 'CHECK':   return `${mover ?? '?'} to move — check!`;
@@ -455,26 +471,45 @@
         draw:      new Audio('/sounds/draw.wav'),
         start:     new Audio('/sounds/start.wav'),
     };
-    let soundEnabled = localStorage.getItem('pc.sound') !== 'off';
 
-    function playSound(name) {
-        if (!name || !soundEnabled) return;
+    function soundOn() {
+        return localStorage.getItem('pc.sound') !== 'off';
+    }
+
+    // De-duplicate: if the same view (same lastMove + status) arrives twice
+    // (reconnection replay, double broadcast on rematch flip, etc.) we
+    // shouldn't fire the sound for it a second time.
+    let lastSoundKey = null;
+
+    function playSound(name, key) {
+        if (!name || !soundOn()) return;
+        if (key && key === lastSoundKey) return;
+        lastSoundKey = key || null;
         const a = sounds[name];
-        if (a) { a.currentTime = 0; a.play().catch(() => {}); }
+        if (!a) return;
+        // Pause any in-flight playback so two rapid moves don't overlap.
+        try { a.pause(); } catch (_) {}
+        a.currentTime = 0;
+        a.play().catch(() => {});
     }
 
     function refreshSoundButton() {
         const b = document.getElementById('btn-sound');
         if (!b) return;
-        b.textContent = soundEnabled ? '🔊' : '🔇';
-        b.title = soundEnabled ? 'Mute sounds' : 'Unmute sounds';
+        const on = soundOn();
+        b.textContent = on ? '🔊' : '🔇';
+        b.title = on ? 'Mute sounds' : 'Unmute sounds';
         b.setAttribute('aria-label', b.title);
     }
     document.getElementById('btn-sound')?.addEventListener('click', () => {
-        soundEnabled = !soundEnabled;
-        localStorage.setItem('pc.sound', soundEnabled ? 'on' : 'off');
+        const next = !soundOn();
+        localStorage.setItem('pc.sound', next ? 'on' : 'off');
         refreshSoundButton();
-        if (soundEnabled) playSound('move');     // audible feedback
+        if (next) { lastSoundKey = null; playSound('move', 'feedback-' + Date.now()); }
+    });
+    // Sync toggle across tabs of the same origin.
+    window.addEventListener('storage', e => {
+        if (e.key === 'pc.sound') refreshSoundButton();
     });
     refreshSoundButton();
 
@@ -543,23 +578,32 @@
         renderHistoryBanner(view);
         if (replayIndex === null) redrawOverlays();
 
-        if (previousStage === 'WAITING_FOR_OPPONENT' && view.stage === 'ACTIVE') {
-            playSound('start');
-        }
-        playSound(view.soundEvent);
+        // The server sends "start" itself when both seats are filled, so we
+        // don't fire an extra one on the stage transition (that was the
+        // duplicate-sound bug). Key the play by view.lastMove + status so
+        // re-broadcasts of the same view don't replay it.
+        const key = (view.lastMove || '') + '|' + view.status + '|' + view.moveHistory.length;
+        playSound(view.soundEvent, key);
     }
 
     if (lastView) applyView(lastView);
 
-    // Local clock ticker — drains the active clock between server pushes.
+    // Local clock + disconnect-countdown ticker.
     setInterval(() => {
-        if (!lastView || lastView.stage !== 'ACTIVE' || lastView.unlimitedTime) return;
-        const now = performance.now();
-        const dt  = now - (lastView.__lastLocal ?? now);
-        lastView.__lastLocal = now;
-        if (lastView.whiteToMove) lastView.whiteMillisLeft = Math.max(0, lastView.whiteMillisLeft - dt);
-        else                      lastView.blackMillisLeft = Math.max(0, lastView.blackMillisLeft - dt);
-        renderClocks(lastView);
+        if (!lastView) return;
+        const active = lastView.stage === 'ACTIVE';
+        if (active && !lastView.unlimitedTime) {
+            const now = performance.now();
+            const dt  = now - (lastView.__lastLocal ?? now);
+            lastView.__lastLocal = now;
+            if (lastView.whiteToMove) lastView.whiteMillisLeft = Math.max(0, lastView.whiteMillisLeft - dt);
+            else                      lastView.blackMillisLeft = Math.max(0, lastView.blackMillisLeft - dt);
+            renderClocks(lastView);
+        }
+        // Refresh the "opponent disconnected" countdown text every tick.
+        if (active && disconnectedOpponentSecondsLeft(lastView) !== null) {
+            $status.textContent = statusText(lastView);
+        }
     }, 250);
 
     // ─────────────────────────────────────────────────────────────────────

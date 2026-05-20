@@ -40,10 +40,12 @@ public class GameService {
     private final ConcurrentMap<String, ScheduledFuture<?>> flagFalls = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, ScheduledFuture<?>> aborts    = new ConcurrentHashMap<>();
 
-    /** First mover (white) must move within this window or the game is aborted. */
-    private static final long FIRST_MOVE_ABORT_MS  = 30_000;
-    /** After white's first move, black has this much time to play their first move. */
-    private static final long SECOND_MOVE_ABORT_MS = 15_000;
+    /** Both sides get this long to make their first move; the game aborts otherwise. */
+    private static final long FIRST_MOVE_ABORT_MS = 30_000;
+    /** A disconnected player is forfeited if they don't reconnect within this window. */
+    public static final long DISCONNECT_FORFEIT_MILLIS = 120_000;
+
+    private final ConcurrentMap<String, ScheduledFuture<?>> disconnectForfeits = new ConcurrentHashMap<>();
 
     public GameService(GameRegistry registry, SimpMessagingTemplate messaging) {
         this.registry = registry;
@@ -71,6 +73,24 @@ public class GameService {
                              || (s.black() != null && displayName.equals(s.black().name()));
             if (isCreator) registry.remove(s.id());
         }
+    }
+
+    /**
+     * All games {@code displayName} is currently participating in — useful
+     * for showing a "your games" panel in the lobby so the user can return
+     * to a tab they accidentally closed.
+     */
+    public java.util.List<GameSession> findActiveGamesFor(String displayName) {
+        java.util.List<GameSession> out = new java.util.ArrayList<>();
+        for (GameSession s : registry.all()) {
+            if (s.stage() == GameSession.LifecycleStage.FINISHED
+                    || s.stage() == GameSession.LifecycleStage.ABORTED) continue;
+            if ((s.white() != null && displayName.equals(s.white().name()))
+                || (s.black() != null && displayName.equals(s.black().name()))) {
+                out.add(s);
+            }
+        }
+        return out;
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -398,6 +418,78 @@ public class GameService {
                 java.util.Map.of("gameId", gameId));
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    //  Presence — tracks WebSocket connectivity per user. When a player
+    //  has zero live sessions they get a 2-minute grace window; if they
+    //  haven't reconnected by then, the game is forfeited on their side.
+    // ─────────────────────────────────────────────────────────────────────
+
+    public synchronized void onPlayerDisconnected(String username) {
+        long now = System.currentTimeMillis();
+        for (GameSession s : registry.all()) {
+            if (s.stage() != GameSession.LifecycleStage.ACTIVE) continue;
+            boolean isWhite = s.white() != null && username.equals(s.white().name());
+            boolean isBlack = s.black() != null && username.equals(s.black().name());
+            if (!isWhite && !isBlack) continue;
+
+            if (isWhite) s.setWhiteDisconnectedAt(now);
+            else         s.setBlackDisconnectedAt(now);
+
+            String key = s.id() + ":" + username;
+            cancelExistingForfeit(key);
+            ScheduledFuture<?> fut = scheduler.schedule(
+                    () -> forfeitOnDisconnect(s.id(), username),
+                    DISCONNECT_FORFEIT_MILLIS, TimeUnit.MILLISECONDS);
+            disconnectForfeits.put(key, fut);
+            broadcast(s, null, null);
+            log.info("Player {} went offline in game {}", username, s.id());
+        }
+    }
+
+    public synchronized void onPlayerReconnected(String username) {
+        for (GameSession s : registry.all()) {
+            boolean isWhite = s.white() != null && username.equals(s.white().name());
+            boolean isBlack = s.black() != null && username.equals(s.black().name());
+            if (!isWhite && !isBlack) continue;
+            boolean wasOffline = (isWhite && s.whiteDisconnectedAt() > 0)
+                              || (isBlack && s.blackDisconnectedAt() > 0);
+            if (!wasOffline) continue;
+
+            if (isWhite) s.setWhiteDisconnectedAt(0);
+            else         s.setBlackDisconnectedAt(0);
+            cancelExistingForfeit(s.id() + ":" + username);
+            broadcast(s, null, null);
+            log.info("Player {} reconnected to game {}", username, s.id());
+        }
+    }
+
+    private void cancelExistingForfeit(String key) {
+        ScheduledFuture<?> fut = disconnectForfeits.remove(key);
+        if (fut != null) fut.cancel(false);
+    }
+
+    private void forfeitOnDisconnect(String gameId, String username) {
+        GameSession s = registry.find(gameId).orElse(null);
+        if (s == null) return;
+        synchronized (s) {
+            if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
+            boolean stillOffline = (s.white() != null && username.equals(s.white().name())
+                                    && s.whiteDisconnectedAt() > 0)
+                                || (s.black() != null && username.equals(s.black().name())
+                                    && s.blackDisconnectedAt() > 0);
+            if (!stillOffline) return;     // they reconnected in the meantime
+
+            boolean isWhite = s.white() != null && username.equals(s.white().name());
+            s.engine().resignBy(isWhite);
+            s.markFinished();
+            cancelFlagFall(gameId);
+            cancelAbortTimer(gameId);
+            broadcast(s, null, "checkmate");
+            log.info("Game {} forfeited — {} stayed offline for {} ms",
+                    gameId, username, DISCONNECT_FORFEIT_MILLIS);
+        }
+    }
+
     public synchronized void postChat(String gameId, String byName, String text) {
         GameSession s = registry.find(gameId).orElseThrow();
         if (s.playerByName(byName) == null) return;
@@ -462,11 +554,9 @@ public class GameService {
         if (s.black() != null && s.black().bot()) return;
         if (s.isClockRunning() && s.moveHistory().size() >= 2) return;
 
-        long delay = s.moveHistory().isEmpty()
-                ? FIRST_MOVE_ABORT_MS : SECOND_MOVE_ABORT_MS;
         String sessionId = s.id();
         ScheduledFuture<?> fut = scheduler.schedule(
-                () -> onAbort(sessionId), delay, TimeUnit.MILLISECONDS);
+                () -> onAbort(sessionId), FIRST_MOVE_ABORT_MS, TimeUnit.MILLISECONDS);
         aborts.put(sessionId, fut);
     }
 

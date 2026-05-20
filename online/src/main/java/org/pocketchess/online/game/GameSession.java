@@ -53,6 +53,10 @@ public class GameSession {
     private String rematchOfferBy;
     /** New game id if the rematch was accepted — clients use it to redirect. */
     private String rematchToGameId;
+    /** Wall-clock millis when the white player went offline; 0 if online. */
+    private long whiteDisconnectedAt;
+    /** Wall-clock millis when the black player went offline; 0 if online. */
+    private long blackDisconnectedAt;
 
     GameSession(Player white, Player black,
                 TimeControl tc, GameModeType variant, AIDifficulty aiDifficulty) {
@@ -87,6 +91,8 @@ public class GameSession {
     public String drawOfferBy() { return drawOfferBy; }
     public String rematchOfferBy() { return rematchOfferBy; }
     public String rematchToGameId() { return rematchToGameId; }
+    public long whiteDisconnectedAt() { return whiteDisconnectedAt; }
+    public long blackDisconnectedAt() { return blackDisconnectedAt; }
     public String undoRequestBy() { return undoRequestBy; }
 
     public boolean whiteToMove() { return engine.isWhiteTurn(); }
@@ -182,6 +188,8 @@ public class GameSession {
     void clearDrawOffer() { this.drawOfferBy = null; }
     void clearUndoRequest() { this.undoRequestBy = null; }
     void clearRematchOffer() { this.rematchOfferBy = null; }
+    void setWhiteDisconnectedAt(long t) { this.whiteDisconnectedAt = t; }
+    void setBlackDisconnectedAt(long t) { this.blackDisconnectedAt = t; }
 
     void recordMove(MoveResult mr) {
         moveHistory.add(mr.uci());

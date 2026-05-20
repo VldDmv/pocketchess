@@ -38,7 +38,10 @@ public record GameView(
         List<String> legalMoves,           // every legal half-move for the side to move, in UCI
         List<String> lavaSquares,
         List<String> warningSquares,
-        String kingInCheckSquare
+        String kingInCheckSquare,
+        long whiteDisconnectedAt,
+        long blackDisconnectedAt,
+        long disconnectForfeitMillis
 ) {
 
     public static GameView of(GameSession s, String lastMove, String soundEvent) {
@@ -72,7 +75,10 @@ public record GameView(
                 s.engine().legalMoves(),
                 s.engine().lavaSquares(),
                 s.engine().warningSquares(),
-                s.engine().kingInCheckSquare()
+                s.engine().kingInCheckSquare(),
+                s.whiteDisconnectedAt(),
+                s.blackDisconnectedAt(),
+                GameService.DISCONNECT_FORFEIT_MILLIS
         );
     }
 }
