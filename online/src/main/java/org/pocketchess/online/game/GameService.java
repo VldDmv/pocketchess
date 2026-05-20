@@ -377,7 +377,6 @@ public class GameService {
     private void finaliseRematch(GameSession finished, String acceptedBy) {
         Player whiteOld = finished.white();
         Player blackOld = finished.black();
-        boolean acceptedByWhite = whiteOld != null && acceptedBy.equals(whiteOld.name());
 
         GameSession fresh;
         if (whiteOld != null && whiteOld.bot()) {
@@ -390,15 +389,13 @@ public class GameService {
             fresh = createVsBot(human, false, finished.timeControl(),
                     finished.variant(), finished.aiDifficulty());
         } else {
-            // PvP: swap colours so the other side plays white next.
-            Player newWhite = acceptedByWhite ? blackOld : whiteOld;
-            Player newBlack = acceptedByWhite ? whiteOld : blackOld;
-            fresh = new GameSession(newWhite, newBlack,
+            // PvP: swap colours so each rematch has the other side opening.
+            fresh = new GameSession(blackOld, whiteOld,
                     finished.timeControl(), finished.variant(),
                     finished.aiDifficulty());
             registry.put(fresh);
             log.info("Rematch PvP game {} ({} vs {})",
-                    fresh.id(), newWhite.name(), newBlack.name());
+                    fresh.id(), blackOld.name(), whiteOld.name());
         }
 
         finished.setRematchToGameId(fresh.id());

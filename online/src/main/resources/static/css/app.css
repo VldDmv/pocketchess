@@ -207,6 +207,22 @@ table.games td a.btn { display: inline-block; padding: 6px 10px; }
 }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .actions .sound-btn { margin-left: auto; min-width: 38px; padding: 7px 10px; font-size: 16px; }
+
+/* Icon-button row (lichess-style). Each button is a square with a single
+   glyph; the tooltip explains it on hover. Keeps the action bar compact. */
+.actions-icons .icon-btn {
+    min-width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 19px;
+    line-height: 1;
+}
+.actions-icons .icon-btn.danger:not([disabled]):hover { color: var(--err); border-color: var(--err); }
+.actions-icons .icon-btn[disabled] { opacity: 0.45; }
+.actions-icons .sound-btn { margin-left: auto; font-size: 18px; }
 .move-list {
     background: var(--panel); border: 1px solid var(--line);
     border-radius: 6px; padding: 10px; max-height: 220px; overflow-y: auto;

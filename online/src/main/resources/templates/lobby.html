@@ -32,7 +32,7 @@
     <div class="lobby">
         <section class="panel">
             <h3>Play vs bot</h3>
-            <form id="bot-form" class="form">
+            <form id="bot-form" class="form" onsubmit="return false">
                 <div class="row">
                     <label>Colour
                         <select name="color">
@@ -82,13 +82,13 @@
                         <input type="number" name="customIncrement" min="0" max="60" value="0"/>
                     </label>
                 </div>
-                <button type="submit" class="btn primary">Start game</button>
+                <button type="button" id="bot-start" class="btn primary">Start game</button>
             </form>
         </section>
 
         <section class="panel">
             <h3>Play vs player</h3>
-            <form id="open-form" class="form">
+            <form id="open-form" class="form" onsubmit="return false">
                 <div class="row">
                     <label>Colour
                         <select name="color">
@@ -131,7 +131,7 @@
                         <input type="number" name="customIncrement" min="0" max="60" value="0"/>
                     </label>
                 </div>
-                <button type="submit" class="btn primary">Create open challenge</button>
+                <button type="button" id="open-create" class="btn primary">Create open challenge</button>
             </form>
         </section>
     </div>
@@ -140,13 +140,13 @@
         <div class="row between">
             <h3 style="margin:0">Open games <span class="tag live" id="lobby-live">live</span></h3>
             <div class="row" style="gap:10px; align-items:center">
-                <label class="muted" style="font-size:13px">Filter
+                <label class="muted" style="font-size:13px" title="Filter by time control bucket">Time control
                     <select id="category-filter">
                         <option value="ALL" selected>All</option>
-                        <option value="BULLET">Bullet</option>
-                        <option value="BLITZ">Blitz</option>
-                        <option value="RAPID">Rapid</option>
-                        <option value="CLASSICAL">Classical</option>
+                        <option value="BULLET">Bullet (&lt; 3 min)</option>
+                        <option value="BLITZ">Blitz (3–8 min)</option>
+                        <option value="RAPID">Rapid (8–25 min)</option>
+                        <option value="CLASSICAL">Classical (&gt; 25 min)</option>
                         <option value="UNLIMITED">Unlimited</option>
                     </select>
                 </label>

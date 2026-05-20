@@ -62,18 +62,20 @@
         window.location.href = '/game/' + encodeURIComponent(gameId);
     }
 
-    document.getElementById('bot-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
+    // Buttons are type="button" so the form can't submit natively while the
+    // listener is still attaching — that used to GET-navigate to a URL with
+    // form data in the query string before the JS handler bound.
+    document.getElementById('bot-start')?.addEventListener('click', async () => {
         try {
-            const r = await postJson('/api/play/bot', readForm(e.target));
+            const r = await postJson('/api/play/bot',
+                readForm(document.getElementById('bot-form')));
             go(r.gameId);
         } catch (err) { alert(err.message); }
     });
-
-    document.getElementById('open-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
+    document.getElementById('open-create')?.addEventListener('click', async () => {
         try {
-            const r = await postJson('/api/play/open', readForm(e.target));
+            const r = await postJson('/api/play/open',
+                readForm(document.getElementById('open-form')));
             go(r.gameId);
         } catch (err) { alert(err.message); }
     });
@@ -158,7 +160,19 @@
     }
 
     if (filter) {
-        filter.addEventListener('change', () => render(latestEntries || []));
+        filter.addEventListener('change', async () => {
+            // If no STOMP push has arrived yet, pull the current list once so
+            // the filter has something to operate on instead of wiping the
+            // Thymeleaf-rendered table to an empty state.
+            if (latestEntries === null) {
+                try {
+                    const res = await fetch('/api/play/lobby');
+                    if (res.ok) latestEntries = await res.json();
+                    else latestEntries = [];
+                } catch (_) { latestEntries = []; }
+            }
+            render(latestEntries);
+        });
     }
 
     function formatTc(e) {
