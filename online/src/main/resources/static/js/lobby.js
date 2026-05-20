@@ -109,6 +109,26 @@
     document.querySelectorAll('.join-btn').forEach(joinHandler);
     document.querySelectorAll('.cancel-btn').forEach(cancelHandler);
 
+    // PGN import
+    document.getElementById('pgn-load')?.addEventListener('click', async () => {
+        const text = document.getElementById('pgn-input').value;
+        const err  = document.getElementById('pgn-error');
+        err.textContent = '';
+        try {
+            const res = await fetch('/api/play/import-pgn', {
+                method: 'POST', headers: jsonHeaders(), body: JSON.stringify({ pgn: text })
+            });
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}));
+                throw new Error(body.error || ('HTTP ' + res.status));
+            }
+            const r = await res.json();
+            go(r.gameId);
+        } catch (e) {
+            err.textContent = e.message;
+        }
+    });
+
     // Live updates
     const tbody = document.querySelector('#games-table tbody');
     const counter = document.getElementById('lobby-count');

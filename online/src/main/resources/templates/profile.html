@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{layout :: layout('Profile — PocketChess', ~{::main})}">
+<body>
+<main>
+    <section class="panel profile-summary">
+        <div class="row between">
+            <div>
+                <h2 style="margin:0" th:text="${user.displayName}">player</h2>
+                <p class="muted" style="margin:6px 0 0; font-size:13px">
+                    Joined <span th:text="${#temporals.format(user.createdAt, 'yyyy-MM-dd')}">2026-01-01</span>
+                </p>
+            </div>
+            <div class="rating-block">
+                <div class="rating-value" th:text="${user.elo}">1200</div>
+                <div class="muted" style="font-size:12px">Rating</div>
+            </div>
+        </div>
+        <div class="row" style="gap: 22px; margin-top: 16px">
+            <div><span class="muted">Wins</span> <strong th:text="${wins}">0</strong></div>
+            <div><span class="muted">Losses</span> <strong th:text="${losses}">0</strong></div>
+            <div><span class="muted">Draws</span> <strong th:text="${draws}">0</strong></div>
+        </div>
+    </section>
+
+    <section class="panel" style="margin-top:18px">
+        <h3 style="margin-top:0">Recent rated games <span class="muted" style="font-size:12px"
+            th:text="${recent.size()} + ' shown'">0</span></h3>
+        <table class="games" th:if="${!recent.empty}">
+            <thead>
+            <tr><th>Result</th><th>Opponent</th><th>Δ</th><th>Variant</th><th>Time</th><th>End</th><th></th></tr>
+            </thead>
+            <tbody>
+            <tr th:each="r : ${recent}">
+                <td>
+                    <span class="result-pill" th:classappend="'res-' + ${r.result}" th:text="${r.result}">win</span>
+                </td>
+                <td>
+                    <a th:href="@{'/profile/' + ${r.opponent}}" th:text="${r.opponent}">opp</a>
+                </td>
+                <td th:text="(${r.eloDelta &gt; 0} ? '+' : '') + ${r.eloDelta}"
+                    th:classappend="${r.eloDelta &gt; 0 ? 'delta-up' : (r.eloDelta &lt; 0 ? 'delta-down' : '')}">+12</td>
+                <td th:text="${r.variant}">CLASSIC</td>
+                <td th:text="${r.unlimitedTime ? 'unlimited' :
+                    ((r.baseTimeSeconds &lt; 60 ? r.baseTimeSeconds + ' s' : (r.baseTimeSeconds / 60) + ' min')
+                       + (r.incrementSeconds &gt; 0 ? ' + ' + r.incrementSeconds + ' s' : ''))}">5 min</td>
+                <td class="muted" style="font-size:12px" th:text="${r.terminationCode}">…</td>
+                <td><a class="btn" th:href="@{'/game/' + ${r.sessionId}}" title="Replay">▶</a></td>
+            </tr>
+            </tbody>
+        </table>
+        <p th:if="${recent.empty}" class="muted">No rated games yet.</p>
+    </section>
+</main>
+</body>
+</html>

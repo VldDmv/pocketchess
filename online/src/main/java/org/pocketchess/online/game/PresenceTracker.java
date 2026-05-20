@@ -10,37 +10,60 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Tracks how many live WebSocket sessions each user has. When a user's
- * session count drops to zero, the {@link GameService} is notified so it
- * can start the disconnect grace timer; when the user reconnects (count
- * climbs back from zero), the service cancels the pending forfeit.
+ * Tracks live WebSocket sessions per user and notifies the
+ * {@link GameService} when a player actually goes offline.
  *
- * <p>Each browser tab opens its own STOMP session, so the count handles
- * multi-tab use correctly.
+ * <p><b>Why debounce?</b> Navigating between {@code /lobby} and
+ * {@code /game/{id}} kills the page's SockJS connection and the next
+ * page opens a fresh one. There's a 50–500 ms gap where the session
+ * count drops to zero even though the user is still on the site. Without
+ * debounce that would flap "Opponent disconnected — 120s to reconnect"
+ * at the opponent every time someone clicked a link. The grace window
+ * we wait before firing {@code onPlayerDisconnected} smooths that out,
+ * matching how lichess and chess.com treat site-wide presence.
  */
 @Component
 public class PresenceTracker {
 
+    /** How long zero-session state has to persist before we tell the game service. */
+    public static final long OFFLINE_DEBOUNCE_MS = 5_000;
+
     private static final Logger log = LoggerFactory.getLogger(PresenceTracker.class);
 
     private final GameService gameService;
-    private final ConcurrentMap<String, AtomicInteger> liveSessions = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService scheduler;
+    private final ConcurrentMap<String, Presence> users = new ConcurrentHashMap<>();
 
     public PresenceTracker(GameService gameService) {
         this.gameService = gameService;
+        this.scheduler = Executors.newScheduledThreadPool(1, namedDaemon());
     }
 
     @EventListener
     public void onConnect(SessionConnectedEvent e) {
         String name = CurrentUser.displayNameOf(e.getUser());
         if (name == null) return;
-        int after = liveSessions.computeIfAbsent(name, k -> new AtomicInteger())
-                .incrementAndGet();
-        if (after == 1) {
-            log.debug("{} came online", name);
+        Presence p = users.computeIfAbsent(name, k -> new Presence());
+        boolean wasOffline;
+        synchronized (p) {
+            p.sessions++;
+            if (p.pending != null) {
+                p.pending.cancel(false);
+                p.pending = null;
+            }
+            wasOffline = p.offline;
+            p.offline = false;
+        }
+        if (wasOffline) {
+            log.debug("{} reconnected (debounced)", name);
             gameService.onPlayerReconnected(name);
         }
     }
@@ -49,13 +72,53 @@ public class PresenceTracker {
     public void onDisconnect(SessionDisconnectEvent e) {
         String name = CurrentUser.displayNameOf(e.getUser());
         if (name == null) return;
-        AtomicInteger counter = liveSessions.get(name);
-        if (counter == null) return;
-        int after = counter.decrementAndGet();
-        if (after <= 0) {
-            liveSessions.remove(name, counter);
-            log.debug("{} went offline", name);
+        Presence p = users.get(name);
+        if (p == null) return;
+        synchronized (p) {
+            p.sessions = Math.max(0, p.sessions - 1);
+            if (p.sessions == 0 && !p.offline && p.pending == null) {
+                // Defer the "actually offline" callback — the user might be
+                // navigating between pages of the same SPA.
+                p.pending = scheduler.schedule(() -> markOffline(name),
+                        OFFLINE_DEBOUNCE_MS, TimeUnit.MILLISECONDS);
+            }
+        }
+    }
+
+    /** Test seam — bypasses the 5-second wait. */
+    void markOfflineNow(String name) {
+        markOffline(name);
+    }
+
+    private void markOffline(String name) {
+        Presence p = users.get(name);
+        if (p == null) return;
+        boolean fire = false;
+        synchronized (p) {
+            if (p.sessions > 0) return;       // they came back
+            if (p.offline)     return;
+            p.offline = true;
+            p.pending = null;
+            fire = true;
+        }
+        if (fire) {
+            log.debug("{} stayed offline past debounce window", name);
             gameService.onPlayerDisconnected(name);
         }
+    }
+
+    private static ThreadFactory namedDaemon() {
+        final AtomicLong n = new AtomicLong();
+        return r -> {
+            Thread t = new Thread(r, "pc-presence-" + n.incrementAndGet());
+            t.setDaemon(true);
+            return t;
+        };
+    }
+
+    private static class Presence {
+        int sessions;
+        boolean offline;
+        ScheduledFuture<?> pending;
     }
 }

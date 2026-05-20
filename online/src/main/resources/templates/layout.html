@@ -16,9 +16,11 @@
     <a class="brand" href="/">♞ PocketChess</a>
     <nav>
         <a th:if="${#authorization.expression('isAuthenticated()')}" href="/lobby">Lobby</a>
-        <span th:if="${#authorization.expression('isAuthenticated()')}"
-              class="who"
-              sec:authentication="name">user</span>
+        <a th:if="${#authorization.expression('isAuthenticated()')}"
+           class="who"
+           sec:authentication="name"
+           th:href="@{'/profile/' + ${#authentication.name}}">user</a>
+        <span th:if="${currentElo != null}" class="rating-chip" th:text="${currentElo}">1200</span>
         <form th:if="${#authorization.expression('isAuthenticated()')}"
               method="post" action="/logout" class="inline">
             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>

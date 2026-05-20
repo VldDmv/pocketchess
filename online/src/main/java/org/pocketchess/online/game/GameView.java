@@ -41,7 +41,9 @@ public record GameView(
         String kingInCheckSquare,
         long whiteDisconnectedAt,
         long blackDisconnectedAt,
-        long disconnectForfeitMillis
+        long disconnectForfeitMillis,
+        Integer whiteRating,
+        Integer blackRating
 ) {
 
     public static GameView of(GameSession s, String lastMove, String soundEvent) {
@@ -78,7 +80,9 @@ public record GameView(
                 s.engine().kingInCheckSquare(),
                 s.whiteDisconnectedAt(),
                 s.blackDisconnectedAt(),
-                GameService.DISCONNECT_FORFEIT_MILLIS
+                GameService.DISCONNECT_FORFEIT_MILLIS,
+                s.whiteRating(),
+                s.blackRating()
         );
     }
 }

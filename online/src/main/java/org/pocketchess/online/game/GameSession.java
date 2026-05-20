@@ -22,6 +22,11 @@ public class GameSession {
 
     public enum LifecycleStage { WAITING_FOR_OPPONENT, ACTIVE, FINISHED, ABORTED }
 
+    /** True for PGN-import "review" sessions — not persisted, not in your-games list. */
+    private boolean review;
+    public boolean isReview() { return review; }
+    public void markReview() { this.review = true; }
+
     private final String id = UUID.randomUUID().toString();
     private final TimeControl timeControl;
     private final GameModeType variant;
@@ -57,6 +62,9 @@ public class GameSession {
     private long whiteDisconnectedAt;
     /** Wall-clock millis when the black player went offline; 0 if online. */
     private long blackDisconnectedAt;
+    /** Stamped at game creation so a mid-game DB lookup isn't needed. */
+    private Integer whiteRating;
+    private Integer blackRating;
 
     GameSession(Player white, Player black,
                 TimeControl tc, GameModeType variant, AIDifficulty aiDifficulty) {
@@ -93,6 +101,10 @@ public class GameSession {
     public String rematchToGameId() { return rematchToGameId; }
     public long whiteDisconnectedAt() { return whiteDisconnectedAt; }
     public long blackDisconnectedAt() { return blackDisconnectedAt; }
+    public Integer whiteRating() { return whiteRating; }
+    public Integer blackRating() { return blackRating; }
+    public void setWhiteRating(Integer r) { this.whiteRating = r; }
+    public void setBlackRating(Integer r) { this.blackRating = r; }
     public String undoRequestBy() { return undoRequestBy; }
 
     public boolean whiteToMove() { return engine.isWhiteTurn(); }

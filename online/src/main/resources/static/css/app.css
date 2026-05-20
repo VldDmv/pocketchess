@@ -39,6 +39,41 @@ a:hover { text-decoration: underline; }
     cursor: pointer; padding: 0; font: inherit;
 }
 .topbar nav .link:hover { text-decoration: underline; }
+.rating-chip {
+    background: var(--panel-2);
+    color: var(--accent);
+    font-size: 12px; font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+}
+
+/* Profile page */
+.profile-summary { background: var(--panel); }
+.rating-block { text-align: right; }
+.rating-block .rating-value { font-size: 32px; font-weight: 700; color: var(--accent); }
+.result-pill {
+    display: inline-block; padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase;
+    font-weight: 600;
+}
+.result-pill.res-win  { background: rgba(46, 204, 113, .15); color: var(--ok); }
+.result-pill.res-loss { background: rgba(255, 107, 107, .15); color: var(--err); }
+.result-pill.res-draw { background: rgba(170, 170, 170, .15); color: var(--muted); }
+.delta-up   { color: var(--ok); font-variant-numeric: tabular-nums; }
+.delta-down { color: var(--err); font-variant-numeric: tabular-nums; }
+
+/* PGN import widget */
+.pgn-import summary { list-style: none; }
+.pgn-import summary::-webkit-details-marker { display: none; }
+.pgn-text {
+    width: 100%; resize: vertical; min-height: 110px;
+    padding: 9px 11px;
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px;
+    font: 13px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+.pgn-text:focus { outline: none; border-color: var(--accent); }
 main { padding: 24px; max-width: 1100px; margin: 0 auto; }
 .hero { text-align: center; padding: 40px 0; }
 .hero h1 { font-size: 38px; margin: 0 0 12px; }
@@ -132,11 +167,12 @@ table.games td a.btn { display: inline-block; padding: 6px 10px; }
     font-weight: 500;
     letter-spacing: 0.4px;
 }
-.category-pill.cat-BULLET    { color: #ff7676; }
-.category-pill.cat-BLITZ     { color: #ffb648; }
-.category-pill.cat-RAPID     { color: #6ad28a; }
-.category-pill.cat-CLASSICAL { color: #5b9cff; }
-.category-pill.cat-UNLIMITED { color: #c9b1ff; }
+.category-pill.cat-ULTRABULLET { color: #ff4d6d; }
+.category-pill.cat-BULLET      { color: #ff7676; }
+.category-pill.cat-BLITZ       { color: #ffb648; }
+.category-pill.cat-RAPID       { color: #6ad28a; }
+.category-pill.cat-CLASSICAL   { color: #5b9cff; }
+.category-pill.cat-UNLIMITED   { color: #c9b1ff; }
 
 .my-games-panel {
     margin-bottom: 18px;

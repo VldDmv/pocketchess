@@ -31,6 +31,8 @@ public class GameService {
 
     private final GameRegistry registry;
     private final SimpMessagingTemplate messaging;
+    private final org.pocketchess.online.service.GameHistoryService history;
+    private final org.pocketchess.online.repo.UserRepository users;
 
     private final ScheduledExecutorService scheduler =
             Executors.newScheduledThreadPool(2, namedDaemon("pc-flag-"));
@@ -47,9 +49,38 @@ public class GameService {
 
     private final ConcurrentMap<String, ScheduledFuture<?>> disconnectForfeits = new ConcurrentHashMap<>();
 
-    public GameService(GameRegistry registry, SimpMessagingTemplate messaging) {
+    @org.springframework.beans.factory.annotation.Autowired
+    public GameService(GameRegistry registry, SimpMessagingTemplate messaging,
+                       org.pocketchess.online.service.GameHistoryService history,
+                       org.pocketchess.online.repo.UserRepository users) {
         this.registry = registry;
         this.messaging = messaging;
+        this.history = history;
+        this.users = users;
+    }
+
+    /**
+     * Convenience overload for unit tests that don't care about Elo / DB
+     * persistence — those tests can stay synchronous, no Spring context.
+     */
+    public GameService(GameRegistry registry, SimpMessagingTemplate messaging) {
+        this(registry, messaging, null, null);
+    }
+
+    private Integer ratingOf(String displayName) {
+        if (users == null || displayName == null) return null;
+        return users.findByDisplayName(displayName).map(u -> u.getElo()).orElse(null);
+    }
+
+    private void stampRatings(GameSession s) {
+        if (s.white() != null && !s.white().bot()) s.setWhiteRating(ratingOf(s.white().name()));
+        if (s.black() != null && !s.black().bot()) s.setBlackRating(ratingOf(s.black().name()));
+    }
+
+    private void persistIfRated(GameSession s) {
+        if (history == null) return;     // unit tests
+        try { history.recordTerminal(s); }
+        catch (RuntimeException e) { log.warn("Could not persist game {}: {}", s.id(), e.toString()); }
     }
 
     public java.util.Optional<GameSession> find(String gameId) {
@@ -83,6 +114,7 @@ public class GameService {
     public java.util.List<GameSession> findActiveGamesFor(String displayName) {
         java.util.List<GameSession> out = new java.util.ArrayList<>();
         for (GameSession s : registry.all()) {
+            if (s.isReview()) continue;
             if (s.stage() == GameSession.LifecycleStage.FINISHED
                     || s.stage() == GameSession.LifecycleStage.ABORTED) continue;
             if ((s.white() != null && displayName.equals(s.white().name()))
@@ -91,6 +123,27 @@ public class GameService {
             }
         }
         return out;
+    }
+
+    /**
+     * Creates a finished read-only session populated from a PGN. The viewer
+     * can scrub through the moves with the normal history-replay UI.
+     */
+    public GameSession createPgnReview(String viewerName, String pgn) {
+        Player viewer = Player.human(viewerName);
+        Player ghost  = Player.human("PGN");
+        GameSession session = new GameSession(viewer, ghost,
+                org.pocketchess.core.game.model.TimeControl.UNLIMITED,
+                org.pocketchess.core.gamemode.GameModeType.CLASSIC,
+                org.pocketchess.core.ai.difficulty.AIDifficulty.MEDIUM);
+        session.markReview();
+        registry.put(session);
+
+        var results = session.engine().loadFromPgn(pgn);
+        for (var r : results) session.recordMove(r);
+        session.markFinished();
+        log.info("Loaded PGN as review session {} ({} moves)", session.id(), results.size());
+        return session;
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -107,6 +160,7 @@ public class GameService {
                 ? new GameSession(human, bot, tc, variant, difficulty)
                 : new GameSession(bot, human, tc, variant, difficulty);
         registry.put(session);
+        stampRatings(session);
         log.info("Created PvE game {} ({} vs bot/{})", session.id(), humanName, difficulty);
 
         // Clock only starts after the first move; flag-fall is armed there.
@@ -122,6 +176,7 @@ public class GameService {
                 ? new GameSession(creator, null, tc, variant, AIDifficulty.MEDIUM)
                 : new GameSession(null, creator, tc, variant, AIDifficulty.MEDIUM);
         registry.put(session);
+        stampRatings(session);
         log.info("Created open PvP game {} by {}", session.id(), creatorName);
         return session;
     }
@@ -139,6 +194,7 @@ public class GameService {
         // any open challenge of their own — drop those so the lobby stays clean.
         cancelOpenChallengesBy(joinerName);
         session.seatOpponent(Player.human(joinerName));
+        stampRatings(session);
         rearmAbortTimer(session);
         broadcast(session, null, "start");
         // Push redirect to both seats — the creator may still be sitting in
@@ -185,6 +241,7 @@ public class GameService {
             s.markFinished();
             cancelFlagFall(s.id());
             cancelAbortTimer(s.id());
+            persistIfRated(s);
         } else {
             rearmFlagFall(s);
             rearmAbortTimer(s);
@@ -215,6 +272,7 @@ public class GameService {
                     s.markFinished();
                     cancelFlagFall(sessionId);
                     cancelAbortTimer(sessionId);
+                    persistIfRated(s);
                 } else {
                     rearmFlagFall(s);
                     rearmAbortTimer(s);
@@ -242,6 +300,7 @@ public class GameService {
         s.markFinished();
         cancelFlagFall(gameId);
         cancelAbortTimer(gameId);
+        persistIfRated(s);
         broadcast(s, null, "checkmate");
     }
 
@@ -258,6 +317,7 @@ public class GameService {
             cancelFlagFall(gameId);
             cancelAbortTimer(gameId);
             s.clearDrawOffer();
+            persistIfRated(s);
             broadcast(s, null, "draw");
         } else {
             s.setDrawOfferBy(byName);
@@ -394,6 +454,7 @@ public class GameService {
                     finished.timeControl(), finished.variant(),
                     finished.aiDifficulty());
             registry.put(fresh);
+            stampRatings(fresh);
             log.info("Rematch PvP game {} ({} vs {})",
                     fresh.id(), blackOld.name(), whiteOld.name());
         }
@@ -481,6 +542,7 @@ public class GameService {
             s.markFinished();
             cancelFlagFall(gameId);
             cancelAbortTimer(gameId);
+            persistIfRated(s);
             broadcast(s, null, "checkmate");
             log.info("Game {} forfeited — {} stayed offline for {} ms",
                     gameId, username, DISCONNECT_FORFEIT_MILLIS);
@@ -535,6 +597,7 @@ public class GameService {
             else                          s.setBlackMillisLeft(0);
             s.engine().flagFall();
             s.markFinished();
+            persistIfRated(s);
             broadcast(s, null, "checkmate");
         }
     }

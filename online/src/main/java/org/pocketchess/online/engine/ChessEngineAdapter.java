@@ -202,6 +202,36 @@ public class ChessEngineAdapter {
         return UciMove.fromMove(m);
     }
 
+    /**
+     * Parses {@code pgn} into a temporary game and replays each ply through
+     * this adapter so the normal {@code applyMove} path populates the FEN
+     * history, captured-piece bookkeeping and last-move metadata.
+     */
+    public List<MoveResult> loadFromPgn(String pgn) {
+        Game temp = new Game();
+        temp.resetGame(new org.pocketchess.core.game.model.TimeControl(5 * 60, 0),
+                GameMode.PVP, Piece.Color.WHITE, aiDifficulty, GameModeType.CLASSIC);
+        org.pocketchess.core.game.utils.PgnUtils.loadPgn(temp, pgn);
+
+        List<String> uciMoves = new ArrayList<>(temp.getMoveHistory().size());
+        for (Move m : temp.getMoveHistory()) {
+            char promo = m.promotedTo != null ? pieceLetter(m.promotedTo) : 0;
+            String uci = UciMove.fromMove(m, promo == 0 ? null : promo);
+            uciMoves.add(uci);
+        }
+
+        List<MoveResult> out = new ArrayList<>(uciMoves.size());
+        for (String uci : uciMoves) {
+            MoveResult r = applyMove(uci);
+            if (!r.accepted()) {
+                throw new IllegalStateException(
+                        "PGN replay rejected at " + uci + ": " + r.error());
+            }
+            out.add(r);
+        }
+        return out;
+    }
+
     private static String toSquareName(int row, int col) {
         return "" + (char) ('a' + col) + (8 - row);
     }

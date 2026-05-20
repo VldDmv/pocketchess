@@ -45,6 +45,7 @@ public class LobbyService {
         }
         String category = LobbyEntry.categorise(
                 s.timeControl().baseTimeSeconds(),
+                s.timeControl().incrementSeconds(),
                 s.timeControl().isUnlimited());
         return new LobbyEntry(
                 s.id(), creator, colour,
@@ -58,12 +59,13 @@ public class LobbyService {
 
     private static int categoryOrder(LobbyEntry e) {
         return switch (e.category()) {
-            case "BULLET"    -> 0;
-            case "BLITZ"     -> 1;
-            case "RAPID"     -> 2;
-            case "CLASSICAL" -> 3;
-            case "UNLIMITED" -> 4;
-            default          -> 5;
+            case "ULTRABULLET" -> 0;
+            case "BULLET"      -> 1;
+            case "BLITZ"       -> 2;
+            case "RAPID"       -> 3;
+            case "CLASSICAL"   -> 4;
+            case "UNLIMITED"   -> 5;
+            default            -> 6;
         };
     }
 }

@@ -15,19 +15,27 @@ import static org.mockito.Mockito.mock;
 class LobbyServiceTest {
 
     @Test
-    void categorisesByBaseTimeSeconds() {
-        assertThat(LobbyEntry.categorise(15,   false)).isEqualTo("BULLET");
-        assertThat(LobbyEntry.categorise(60,   false)).isEqualTo("BULLET");
-        assertThat(LobbyEntry.categorise(179,  false)).isEqualTo("BULLET");
-        assertThat(LobbyEntry.categorise(180,  false)).isEqualTo("BLITZ");
-        assertThat(LobbyEntry.categorise(300,  false)).isEqualTo("BLITZ");
-        assertThat(LobbyEntry.categorise(479,  false)).isEqualTo("BLITZ");
-        assertThat(LobbyEntry.categorise(480,  false)).isEqualTo("RAPID");
-        assertThat(LobbyEntry.categorise(900,  false)).isEqualTo("RAPID");
-        assertThat(LobbyEntry.categorise(1499, false)).isEqualTo("RAPID");
-        assertThat(LobbyEntry.categorise(1500, false)).isEqualTo("CLASSICAL");
-        assertThat(LobbyEntry.categorise(3600, false)).isEqualTo("CLASSICAL");
-        assertThat(LobbyEntry.categorise(60,   true )).isEqualTo("UNLIMITED");
+    void categorisesByLichessFormula() {
+        // estimated = base + 40 * increment
+        assertThat(LobbyEntry.categorise(15,   0, false)).isEqualTo("ULTRABULLET"); // 15
+        assertThat(LobbyEntry.categorise(29,   0, false)).isEqualTo("ULTRABULLET"); // 29
+        assertThat(LobbyEntry.categorise(30,   0, false)).isEqualTo("BULLET");      // 30
+        assertThat(LobbyEntry.categorise(60,   0, false)).isEqualTo("BULLET");      // 60
+        assertThat(LobbyEntry.categorise(60,   1, false)).isEqualTo("BULLET");      // 100
+        assertThat(LobbyEntry.categorise(179,  0, false)).isEqualTo("BULLET");      // 179
+        assertThat(LobbyEntry.categorise(180,  0, false)).isEqualTo("BLITZ");       // 180
+        assertThat(LobbyEntry.categorise(120,  2, false)).isEqualTo("BLITZ");       // 200
+        assertThat(LobbyEntry.categorise(180,  2, false)).isEqualTo("BLITZ");       // 260
+        assertThat(LobbyEntry.categorise(300,  3, false)).isEqualTo("BLITZ");       // 420
+        assertThat(LobbyEntry.categorise(300,  5, false)).isEqualTo("RAPID");       // 500
+        assertThat(LobbyEntry.categorise(479,  0, false)).isEqualTo("BLITZ");       // 479
+        assertThat(LobbyEntry.categorise(480,  0, false)).isEqualTo("RAPID");       // 480
+        assertThat(LobbyEntry.categorise(900,  0, false)).isEqualTo("RAPID");       // 900
+        assertThat(LobbyEntry.categorise(900, 10, false)).isEqualTo("RAPID");       // 1300
+        assertThat(LobbyEntry.categorise(1499, 0, false)).isEqualTo("RAPID");       // 1499
+        assertThat(LobbyEntry.categorise(1500, 0, false)).isEqualTo("CLASSICAL");   // 1500
+        assertThat(LobbyEntry.categorise(3600, 0, false)).isEqualTo("CLASSICAL");   // 3600
+        assertThat(LobbyEntry.categorise(60,   0, true )).isEqualTo("UNLIMITED");
     }
 
     @Test

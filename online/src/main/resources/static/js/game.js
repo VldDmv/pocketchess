@@ -283,10 +283,14 @@
 
     function renderClocks(view) {
         const topIsBlack = orientation === 'white';
-        const topName = topIsBlack ? view.blackName : view.whiteName;
-        const botName = topIsBlack ? view.whiteName : view.blackName;
-        $clockTop.querySelector('.name').textContent = topName ?? '—';
-        $clockBot.querySelector('.name').textContent = botName ?? me;
+        const topName   = topIsBlack ? view.blackName   : view.whiteName;
+        const botName   = topIsBlack ? view.whiteName   : view.blackName;
+        const topRating = topIsBlack ? view.blackRating : view.whiteRating;
+        const botRating = topIsBlack ? view.whiteRating : view.blackRating;
+        $clockTop.querySelector('.name').textContent =
+                (topName ?? '—') + (topRating != null ? ' (' + topRating + ')' : '');
+        $clockBot.querySelector('.name').textContent =
+                (botName ?? me)  + (botRating != null ? ' (' + botRating + ')' : '');
 
         const topMs = topIsBlack ? view.blackMillisLeft : view.whiteMillisLeft;
         const botMs = topIsBlack ? view.whiteMillisLeft : view.blackMillisLeft;

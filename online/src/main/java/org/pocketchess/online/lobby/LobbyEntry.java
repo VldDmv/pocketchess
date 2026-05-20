@@ -9,19 +9,29 @@ public record LobbyEntry(
         int incrementSeconds,
         boolean unlimitedTime,
         String variant,
-        String category          // BULLET, BLITZ, RAPID, CLASSICAL, UNLIMITED
+        String category          // ULTRABULLET, BULLET, BLITZ, RAPID, CLASSICAL, UNLIMITED
 ) {
 
     /**
-     * Buckets a time control into the lichess-style category. Bucketing is
-     * by base time alone; we treat unlimited as its own bucket so it sorts
-     * to the end.
+     * Lichess-style time-control bucketing: the "estimated duration" is
+     * {@code base + 40 * increment} (40 ≈ moves in an average chess game).
+     * Brackets:
+     * <ul>
+     *   <li>&lt; 30 s  — UltraBullet</li>
+     *   <li>&lt; 3 min  — Bullet</li>
+     *   <li>&lt; 8 min  — Blitz</li>
+     *   <li>&lt; 25 min — Rapid</li>
+     *   <li>≥ 25 min   — Classical</li>
+     *   <li>no clock   — Unlimited</li>
+     * </ul>
      */
-    public static String categorise(int baseSeconds, boolean unlimited) {
+    public static String categorise(int baseSeconds, int incrementSeconds, boolean unlimited) {
         if (unlimited) return "UNLIMITED";
-        if (baseSeconds < 180)  return "BULLET";    // < 3 min
-        if (baseSeconds < 480)  return "BLITZ";     // 3–8 min
-        if (baseSeconds < 1500) return "RAPID";     // 8–25 min
+        long estimated = (long) baseSeconds + 40L * Math.max(0, incrementSeconds);
+        if (estimated < 30)   return "ULTRABULLET";
+        if (estimated < 180)  return "BULLET";
+        if (estimated < 480)  return "BLITZ";
+        if (estimated < 1500) return "RAPID";
         return "CLASSICAL";
     }
 }

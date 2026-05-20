@@ -83,6 +83,22 @@ public class PlayController {
         return ResponseEntity.ok(Map.of("cancelled", true));
     }
 
+    @PostMapping("/import-pgn")
+    public ResponseEntity<?> importPgn(@RequestBody PgnRequest req, Principal principal) {
+        String me = CurrentUser.displayNameOf(principal);
+        if (req == null || req.pgn() == null || req.pgn().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Paste a PGN first."));
+        }
+        try {
+            GameSession s = gameService.createPgnReview(me, req.pgn());
+            return ResponseEntity.ok(Map.of("gameId", s.id()));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    public record PgnRequest(String pgn) {}
+
     @PostMapping("/join")
     public ResponseEntity<?> join(@RequestParam("gameId") String gameId, Principal principal) {
         String me = CurrentUser.displayNameOf(principal);

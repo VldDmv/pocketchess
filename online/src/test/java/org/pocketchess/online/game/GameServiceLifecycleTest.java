@@ -239,4 +239,85 @@ class GameServiceLifecycleTest {
         service.cancelOpenChallengesBy("alice");
         assertThat(service.findOpenChallengeBy("alice")).isEmpty();
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  Presence debounce — bouncing between pages must not fire the
+    //  "Opponent disconnected" flow.
+    // ─────────────────────────────────────────────────────────────────────
+
+    @Test
+    void disconnectThenReconnectWithinDebounceDoesNotMarkOffline() throws Exception {
+        GameSession s = service.createOpen("alice", true,
+                new TimeControl(5 * 60, 0), GameModeType.CLASSIC);
+        service.join(s, "bob");
+
+        PresenceTracker presence = new PresenceTracker(service);
+        // Simulate three quick page navigations for bob: each is connect+disconnect.
+        java.lang.reflect.Field f = PresenceTracker.class.getDeclaredField("users");
+        f.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> users = (java.util.Map<String, Object>) f.get(presence);
+
+        // Connect → Disconnect → wait briefly → Connect (still within 5s debounce)
+        feedConnect(presence, "bob");
+        feedDisconnect(presence, "bob");
+        Thread.sleep(200);             // far less than OFFLINE_DEBOUNCE_MS
+        feedConnect(presence, "bob");
+
+        assertThat(s.blackDisconnectedAt())
+                .as("brief page navigation must NOT register as a disconnect")
+                .isZero();
+    }
+
+    private static void feedConnect(PresenceTracker pt, String name) throws Exception {
+        java.lang.reflect.Method m = PresenceTracker.class.getDeclaredMethod("onConnect",
+                org.springframework.web.socket.messaging.SessionConnectedEvent.class);
+        m.invoke(pt, makeConnectEvent(name));
+    }
+
+    private static void feedDisconnect(PresenceTracker pt, String name) throws Exception {
+        java.lang.reflect.Method m = PresenceTracker.class.getDeclaredMethod("onDisconnect",
+                org.springframework.web.socket.messaging.SessionDisconnectEvent.class);
+        m.invoke(pt, makeDisconnectEvent(name));
+    }
+
+    private static org.springframework.web.socket.messaging.SessionConnectedEvent makeConnectEvent(String name) {
+        org.springframework.messaging.support.MessageBuilder<byte[]> b =
+                org.springframework.messaging.support.MessageBuilder.withPayload(new byte[0]);
+        return new org.springframework.web.socket.messaging.SessionConnectedEvent(
+                new Object(), b.build(), namedPrincipal(name));
+    }
+
+    private static org.springframework.web.socket.messaging.SessionDisconnectEvent makeDisconnectEvent(String name) {
+        return new org.springframework.web.socket.messaging.SessionDisconnectEvent(
+                new Object(), org.springframework.messaging.support.MessageBuilder.withPayload(new byte[0]).build(),
+                "ws-" + name, org.springframework.web.socket.CloseStatus.NORMAL,
+                namedPrincipal(name));
+    }
+
+    private static java.security.Principal namedPrincipal(String name) {
+        return () -> name;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  PGN import — review sessions don't count toward your-games and
+    //  don't get rated, but you can scrub through them.
+    // ─────────────────────────────────────────────────────────────────────
+
+    @Test
+    void pgnImportProducesReviewSession() {
+        // Italian game opening.
+        String pgn = "[Event \"Sample\"]\n[Site \"Local\"]\n[Date \"2026.05.20\"]\n[Round \"1\"]\n" +
+                "[White \"a\"]\n[Black \"b\"]\n[Result \"*\"]\n\n" +
+                "1. e4 e5 2. Nf3 Nc6 3. Bc4 *";
+
+        GameSession s = service.createPgnReview("viewer", pgn);
+
+        assertThat(s.isReview()).isTrue();
+        assertThat(s.moveHistory()).containsExactly("e2e4", "e7e5", "g1f3", "b8c6", "f1c4");
+        assertThat(s.stage()).isEqualTo(GameSession.LifecycleStage.FINISHED);
+        assertThat(service.findActiveGamesFor("viewer"))
+                .as("review session must NOT appear in 'Your games'")
+                .isEmpty();
+    }
 }
