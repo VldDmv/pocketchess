@@ -311,6 +311,49 @@ public class GameService {
     // ─────────────────────────────────────────────────────────────────────
 
     /**
+     * Berserk — the caller halves their starting clock in exchange for a
+     * +1 Elo bonus on win. Only allowed for short time controls
+     * (≤ 10 min estimated) and only before the berserker's first move.
+     */
+    public synchronized void requestBerserk(String gameId, String byName) {
+        GameSession s = registry.find(gameId).orElseThrow();
+        if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
+        if (s.playerByName(byName) == null) return;
+        if (s.timeControl().isUnlimited()) {
+            sendError(gameId, byName, "Berserk needs a time control.");
+            return;
+        }
+        long estimated = s.timeControl().baseTimeSeconds()
+                + 40L * Math.max(0, s.timeControl().incrementSeconds());
+        if (estimated > 600) {
+            sendError(gameId, byName, "Berserk only available for games up to 10 min.");
+            return;
+        }
+        boolean isWhite = s.white() != null && byName.equals(s.white().name());
+        // Allowed only before this side's first move.
+        int myPlies = isWhite ? whitePliesPlayed(s) : blackPliesPlayed(s);
+        if (myPlies > 0) {
+            sendError(gameId, byName, "Too late to berserk — you've already moved.");
+            return;
+        }
+        if (isWhite ? s.whiteBerserked() : s.blackBerserked()) return;
+        s.berserkSide(isWhite);
+        broadcast(s, null, null);
+        log.info("Game {} — {} berserked", gameId, byName);
+    }
+
+    private static int whitePliesPlayed(GameSession s) {
+        // White makes the 1st, 3rd, 5th… moves; count entries at even indices.
+        int n = 0;
+        for (int i = 0; i < s.moveHistory().size(); i += 2) n++;
+        return n;
+    }
+
+    private static int blackPliesPlayed(GameSession s) {
+        return s.moveHistory().size() / 2;
+    }
+
+    /**
      * Voluntary abort — allowed while the game is active and fewer than
      * two plies have been played. After move 2 the game is "in progress"
      * and the only ways out are resign / draw / clock. Mirrors lichess.

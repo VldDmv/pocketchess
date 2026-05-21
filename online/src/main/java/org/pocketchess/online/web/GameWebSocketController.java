@@ -36,6 +36,11 @@ public class GameWebSocketController {
         gameService.requestAbort(gameId, CurrentUser.displayNameOf(principal));
     }
 
+    @MessageMapping("/game/{id}/berserk")
+    public void onBerserk(@DestinationVariable("id") String gameId, Principal principal) {
+        gameService.requestBerserk(gameId, CurrentUser.displayNameOf(principal));
+    }
+
     @MessageMapping("/game/{id}/draw/offer")
     public void onDrawOffer(@DestinationVariable("id") String gameId, Principal principal) {
         gameService.offerDraw(gameId, CurrentUser.displayNameOf(principal));

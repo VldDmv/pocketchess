@@ -355,4 +355,78 @@ class GameServiceLifecycleTest {
                 .as("review session must NOT appear in 'Your games'")
                 .isEmpty();
     }
+
+    @Test
+    void pgnImportAcceptsChess960Variant() {
+        // A short Chess960 game from a known starting position: BRNNQKRB / brnnqkrb.
+        // The PGN carries [Variant "Chess960"] and the starting [FEN ...].
+        String pgn = "[Event \"Chess960\"]\n" +
+                "[Variant \"Chess960\"]\n" +
+                "[SetUp \"1\"]\n" +
+                "[FEN \"brnnqkrb/pppppppp/8/8/8/8/PPPPPPPP/BRNNQKRB w GBgb -\"]\n" +
+                "[White \"a\"]\n[Black \"b\"]\n[Result \"*\"]\n\n" +
+                "1. d4 d5 2. Nc3 Nc6 *";
+
+        GameSession s = service.createPgnReview("viewer", pgn);
+        assertThat(s.moveHistory()).containsExactly("d2d4", "d7d5", "d1c3", "d8c6");
+        assertThat(s.isReview()).isTrue();
+        // The engine was re-seeded to the Chess960 back-rank from the PGN.
+        // After the two N-pair moves the d-knights are gone — back rank shows
+        // BRN1QKRB / brn1qkrb. The bishops, queen, king and rooks are still
+        // in their Chess960 squares, proving the seeding worked.
+        assertThat(s.fen()).startsWith("brn1qkrb/ppp1pppp/2n5/3p4/3P4/2N5/PPP1PPPP/BRN1QKRB");
+    }
+
+    @Test
+    void berserkHalvesClockAndIsRejectedAfterMove() {
+        GameSession s = service.createOpen("alice", true,
+                new TimeControl(180, 0), GameModeType.CLASSIC);   // 3 min bullet
+        service.join(s, "bob");
+        long startWhite = s.livePresentation()[0];
+
+        service.requestBerserk(s.id(), "alice");
+        assertThat(s.whiteBerserked()).isTrue();
+        long afterWhite = s.livePresentation()[0];
+        assertThat(afterWhite)
+                .as("white clock should be roughly halved")
+                .isLessThanOrEqualTo(startWhite / 2 + 200);
+
+        // Once alice has moved, she can't berserk anymore (already berserked
+        // anyway). Bob still can — until he moves.
+        service.applyMove(s.id(), "alice", "e2e4");
+        service.requestBerserk(s.id(), "bob");
+        assertThat(s.blackBerserked()).isTrue();
+
+        service.applyMove(s.id(), "bob", "e7e5");
+        // Even resetting the berserked flag, post-move attempts shouldn't go
+        // through. We simulate by clearing and trying again — the move count
+        // gate alone should reject.
+        GameSession s2 = service.createOpen("carl", true,
+                new TimeControl(180, 0), GameModeType.CLASSIC);
+        service.join(s2, "dave");
+        service.applyMove(s2.id(), "carl", "e2e4");
+        service.applyMove(s2.id(), "dave", "e7e5");
+        service.applyMove(s2.id(), "carl", "g1f3");
+        service.requestBerserk(s2.id(), "carl");
+        assertThat(s2.whiteBerserked())
+                .as("can't berserk after you've already moved")
+                .isFalse();
+    }
+
+    @Test
+    void berserkRejectedForUnlimitedAndLongTimeControls() {
+        GameSession unl = service.createOpen("alice", true,
+                TimeControl.UNLIMITED, GameModeType.CLASSIC);
+        service.join(unl, "bob");
+        service.requestBerserk(unl.id(), "alice");
+        assertThat(unl.whiteBerserked()).isFalse();
+
+        GameSession longGame = service.createOpen("carl", true,
+                new TimeControl(1800, 0), GameModeType.CLASSIC);  // 30 min
+        service.join(longGame, "dave");
+        service.requestBerserk(longGame.id(), "carl");
+        assertThat(longGame.whiteBerserked())
+                .as("berserk only available for ≤ 10-minute games")
+                .isFalse();
+    }
 }

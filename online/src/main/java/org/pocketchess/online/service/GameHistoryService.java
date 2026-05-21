@@ -56,6 +56,9 @@ public class GameHistoryService {
         int whiteBefore = white.getElo();
         int blackBefore = black.getElo();
         int[] after = elo.apply(whiteBefore, blackBefore, whiteScore);
+        // Berserk bonus: +1 if the berserker won outright. Matches lichess.
+        if (session.whiteBerserked() && whiteScore == 1.0) after[0] += 1;
+        if (session.blackBerserked() && whiteScore == 0.0) after[1] += 1;
         white.setElo(after[0]);
         black.setElo(after[1]);
 

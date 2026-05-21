@@ -287,10 +287,16 @@
         const botName   = topIsBlack ? view.whiteName   : view.blackName;
         const topRating = topIsBlack ? view.blackRating : view.whiteRating;
         const botRating = topIsBlack ? view.whiteRating : view.blackRating;
+        const topBerserk = topIsBlack ? view.blackBerserked : view.whiteBerserked;
+        const botBerserk = topIsBlack ? view.whiteBerserked : view.blackBerserked;
         $clockTop.querySelector('.name').textContent =
-                (topName ?? '—') + (topRating != null ? ' (' + topRating + ')' : '');
+                (topName ?? '—')
+                + (topRating != null ? ' (' + topRating + ')' : '')
+                + (topBerserk ? ' ⚡' : '');
         $clockBot.querySelector('.name').textContent =
-                (botName ?? me)  + (botRating != null ? ' (' + botRating + ')' : '');
+                (botName ?? me)
+                + (botRating != null ? ' (' + botRating + ')' : '')
+                + (botBerserk ? ' ⚡' : '');
 
         const topMs = topIsBlack ? view.blackMillisLeft : view.whiteMillisLeft;
         const botMs = topIsBlack ? view.whiteMillisLeft : view.blackMillisLeft;
@@ -433,6 +439,21 @@
         const abortBtn = document.getElementById('btn-abort');
         abortBtn.style.display = canAbort ? '' : 'none';
 
+        // Berserk: halve your starting clock for a +1 Elo bonus on win.
+        // Allowed only before YOUR first move, on short time controls, PvP.
+        const meIsWhite = myColour === 'white';
+        const myMoves = meIsWhite
+                ? Math.ceil(view.moveHistory.length / 2)
+                : Math.floor(view.moveHistory.length / 2);
+        const alreadyBerserked = meIsWhite ? view.whiteBerserked : view.blackBerserked;
+        const estTime = view.unlimitedTime ? 999999
+                : ((view.whiteMillisLeft + view.blackMillisLeft) / 2000);  // rough fallback
+        const tcLengthOk = !view.unlimitedTime && estTime <= 700;
+        const canBerserk = iAmInGame && !finished && myMoves === 0 && !oppIsBot
+                && !alreadyBerserked && tcLengthOk;
+        const berserkBtn = document.getElementById('btn-berserk');
+        berserkBtn.style.display = canBerserk ? '' : 'none';
+
         // ── Game-over panel: rematch flow + lobby ────────────────────────
         if (finished && iAmInGame) {
             if (view.rematchOfferBy && view.rematchOfferBy !== me) {
@@ -518,7 +539,7 @@
     let lastSoundSeq = -1;
 
     function playSound(name, seq) {
-        if (!name || !soundOn()) return;
+        if (!name || !soundOn() || !isAudioLeader) return;
         if (seq != null && seq <= lastSoundSeq) return;
         if (seq != null) lastSoundSeq = seq;
         const a = sounds[name];
@@ -643,6 +664,31 @@
     }, 250);
 
     // ─────────────────────────────────────────────────────────────────────
+    //  Duplicate-tab guard — if the same game is open in another tab of the
+    //  same browser, the older tab "owns" the audio and the newer one stays
+    //  muted. Solves the case where the creator accidentally has two tabs
+    //  on the same game and hears every move twice.
+    // ─────────────────────────────────────────────────────────────────────
+
+    const tabId = Math.random().toString(36).slice(2);
+    let isAudioLeader = true;
+    let tabChannel = null;
+    try {
+        tabChannel = new BroadcastChannel('pc-game-' + gameId);
+        tabChannel.onmessage = (e) => {
+            const msg = e.data;
+            if (msg && msg.kind === 'hello' && msg.tabId !== tabId) {
+                // A new tab is announcing itself — we were here first, claim leadership.
+                tabChannel.postMessage({ kind: 'leader', tabId });
+            } else if (msg && msg.kind === 'leader' && msg.tabId !== tabId) {
+                // Another tab is the leader; mute ourselves.
+                isAudioLeader = false;
+            }
+        };
+        tabChannel.postMessage({ kind: 'hello', tabId });
+    } catch (_) { /* BroadcastChannel not supported — accept potential dup */ }
+
+    // ─────────────────────────────────────────────────────────────────────
     //  STOMP
     // ─────────────────────────────────────────────────────────────────────
 
@@ -660,27 +706,37 @@
         });
     }
 
+    // Hold the subscription objects so reconnects don't pile up duplicate
+    // handlers (which would deliver each broadcast 2× / 3× to the page).
+    let subs = [];
+    function unsubscribeAll() {
+        subs.forEach(s => { try { s.unsubscribe(); } catch (_) {} });
+        subs = [];
+    }
+
     stomp.onConnect = () => {
-        stomp.subscribe('/topic/game/' + gameId, msg => applyView(JSON.parse(msg.body)));
-        stomp.subscribe('/topic/game/' + gameId + '/chat', msg => {
+        unsubscribeAll();
+        subs.push(stomp.subscribe('/topic/game/' + gameId,
+                msg => applyView(JSON.parse(msg.body))));
+        subs.push(stomp.subscribe('/topic/game/' + gameId + '/chat', msg => {
             const c = JSON.parse(msg.body);
             const div = document.createElement('div');
             div.innerHTML = `<span class="from">${escapeHtml(c.from)}</span>: ${escapeHtml(c.text)}`;
             $chatLog.appendChild(div);
             $chatLog.scrollTop = $chatLog.scrollHeight;
-        });
-        stomp.subscribe('/user/queue/game/' + gameId + '/errors', msg => {
+        }));
+        subs.push(stomp.subscribe('/user/queue/game/' + gameId + '/errors', msg => {
             const e = JSON.parse(msg.body);
             $status.textContent = '⚠ ' + e.reason;
             if (lastView) board.position(fenBoardOnly(lastView.fen), true);
-        });
+        }));
         // Personal redirect — used by the server for rematch acceptance.
-        stomp.subscribe('/user/queue/redirect', msg => {
+        subs.push(stomp.subscribe('/user/queue/redirect', msg => {
             const r = JSON.parse(msg.body);
             if (r.gameId && r.gameId !== gameId) {
                 window.location.href = '/game/' + encodeURIComponent(r.gameId);
             }
-        });
+        }));
     };
     stomp.activate();
 
@@ -693,6 +749,9 @@
     };
     document.getElementById('btn-abort').onclick = () => {
         if (confirm('Abort this game? No rating change.')) send('abort');
+    };
+    document.getElementById('btn-berserk').onclick = () => {
+        if (confirm('Berserk? Halves your clock for +1 rating on win.')) send('berserk');
     };
     document.getElementById('btn-draw').onclick = () => send('draw/offer');
     document.getElementById('btn-undo').onclick = () => send('undo/request');

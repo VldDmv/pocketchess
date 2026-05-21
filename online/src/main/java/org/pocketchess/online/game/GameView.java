@@ -44,6 +44,8 @@ public record GameView(
         long disconnectForfeitMillis,
         Integer whiteRating,
         Integer blackRating,
+        boolean whiteBerserked,
+        boolean blackBerserked,
         long eventSeq
 ) {
 
@@ -84,6 +86,8 @@ public record GameView(
                 GameService.DISCONNECT_FORFEIT_MILLIS,
                 s.whiteRating(),
                 s.blackRating(),
+                s.whiteBerserked(),
+                s.blackBerserked(),
                 s.nextBroadcastSeq()
         );
     }

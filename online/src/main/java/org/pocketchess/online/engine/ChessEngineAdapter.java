@@ -206,12 +206,32 @@ public class ChessEngineAdapter {
      * Parses {@code pgn} into a temporary game and replays each ply through
      * this adapter so the normal {@code applyMove} path populates the FEN
      * history, captured-piece bookkeeping and last-move metadata.
+     *
+     * <p>If the PGN declares {@code [Variant "Chess960"]} with a {@code [FEN ...]}
+     * header, our own game is re-seeded to that exact back-rank so the moves
+     * apply against the right initial position.
      */
     public List<MoveResult> loadFromPgn(String pgn) {
         Game temp = new Game();
         temp.resetGame(new org.pocketchess.core.game.model.TimeControl(5 * 60, 0),
                 GameMode.PVP, Piece.Color.WHITE, aiDifficulty, GameModeType.CLASSIC);
         org.pocketchess.core.game.utils.PgnUtils.loadPgn(temp, pgn);
+
+        if (temp.getGameModeType() == GameModeType.CHESS960) {
+            org.pocketchess.core.general.Board snap = temp.getBoard().getInitialSnapshot();
+            if (snap != null) {
+                game.resetGame(
+                        new org.pocketchess.core.game.model.TimeControl(5 * 60, 0),
+                        GameMode.PVP, Piece.Color.WHITE,
+                        aiDifficulty, GameModeType.CHESS960);
+                for (int r = 0; r < 8; r++) {
+                    for (int c = 0; c < 8; c++) {
+                        game.getBoard().getBox(r, c).setPiece(snap.getBox(r, c).getPiece());
+                    }
+                }
+                game.getBoard().saveAsInitial();
+            }
+        }
 
         List<String> uciMoves = new ArrayList<>(temp.getMoveHistory().size());
         for (Move m : temp.getMoveHistory()) {

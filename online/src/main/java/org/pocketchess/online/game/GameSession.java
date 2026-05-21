@@ -71,6 +71,9 @@ public class GameSession {
     /** Stamped at game creation so a mid-game DB lookup isn't needed. */
     private Integer whiteRating;
     private Integer blackRating;
+    /** True if the side berserked — halved their starting clock for a rating bonus. */
+    private boolean whiteBerserked;
+    private boolean blackBerserked;
 
     GameSession(Player white, Player black,
                 TimeControl tc, GameModeType variant, AIDifficulty aiDifficulty) {
@@ -111,6 +114,21 @@ public class GameSession {
     public Integer blackRating() { return blackRating; }
     public void setWhiteRating(Integer r) { this.whiteRating = r; }
     public void setBlackRating(Integer r) { this.blackRating = r; }
+    public boolean whiteBerserked() { return whiteBerserked; }
+    public boolean blackBerserked() { return blackBerserked; }
+
+    /** Marks the given side as berserked and halves their starting clock. */
+    void berserkSide(boolean isWhite) {
+        if (isWhite) {
+            if (whiteBerserked) return;
+            whiteBerserked = true;
+            whiteMillisLeft = Math.max(1_000L, whiteMillisLeft / 2);
+        } else {
+            if (blackBerserked) return;
+            blackBerserked = true;
+            blackMillisLeft = Math.max(1_000L, blackMillisLeft / 2);
+        }
+    }
     public String undoRequestBy() { return undoRequestBy; }
 
     public boolean whiteToMove() { return engine.isWhiteTurn(); }

@@ -292,6 +292,7 @@ table.games td a.btn { display: inline-block; padding: 6px 10px; }
     line-height: 1;
 }
 .actions-icons .icon-btn.danger:not([disabled]):hover { color: var(--err); border-color: var(--err); }
+.actions-icons .icon-btn.berserk:not([disabled]):hover { color: #ffb648; border-color: #ffb648; }
 .actions-icons .icon-btn[disabled] { opacity: 0.45; }
 .actions-icons .sound-btn { margin-left: auto; font-size: 18px; }
 
