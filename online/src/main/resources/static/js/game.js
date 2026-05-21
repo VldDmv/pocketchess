@@ -427,6 +427,11 @@
         document.getElementById('btn-resign').disabled = !iAmInGame || finished;
         document.getElementById('btn-draw').disabled   = !iAmInGame || finished || oppIsBot;
         document.getElementById('btn-undo').disabled   = !iAmInGame || finished || view.moveHistory.length === 0;
+        // Abort is only available while neither side has settled in — once
+        // two plies are on the board the only outs are resign / draw / clock.
+        const canAbort = iAmInGame && !finished && view.moveHistory.length < 2 && !oppIsBot;
+        const abortBtn = document.getElementById('btn-abort');
+        abortBtn.style.display = canAbort ? '' : 'none';
 
         // ── Game-over panel: rematch flow + lobby ────────────────────────
         if (finished && iAmInGame) {
@@ -685,6 +690,9 @@
 
     document.getElementById('btn-resign').onclick = () => {
         if (confirm('Resign this game?')) send('resign');
+    };
+    document.getElementById('btn-abort').onclick = () => {
+        if (confirm('Abort this game? No rating change.')) send('abort');
     };
     document.getElementById('btn-draw').onclick = () => send('draw/offer');
     document.getElementById('btn-undo').onclick = () => send('undo/request');

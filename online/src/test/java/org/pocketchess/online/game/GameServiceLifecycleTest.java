@@ -168,6 +168,26 @@ class GameServiceLifecycleTest {
     }
 
     @Test
+    void abortAllowedBeforeMove2OnlyAndUnrated() {
+        GameSession s = service.createOpen("alice", true,
+                new TimeControl(5 * 60, 0), GameModeType.CLASSIC);
+        service.join(s, "bob");
+
+        // Either side can abort before anyone has moved.
+        service.requestAbort(s.id(), "bob");
+        assertThat(s.stage()).isEqualTo(GameSession.LifecycleStage.ABORTED);
+
+        // Second game: abort after move 2 should NOT change the state.
+        GameSession s2 = service.createOpen("carl", true,
+                new TimeControl(5 * 60, 0), GameModeType.CLASSIC);
+        service.join(s2, "dave");
+        service.applyMove(s2.id(), "carl", "e2e4");
+        service.applyMove(s2.id(), "dave", "e7e5");
+        service.requestAbort(s2.id(), "carl");
+        assertThat(s2.stage()).isEqualTo(GameSession.LifecycleStage.ACTIVE);
+    }
+
+    @Test
     void offererCanCancelTheirOwnRematchOffer() {
         GameSession s = service.createOpen("alice", true,
                 new TimeControl(5 * 60, 0), GameModeType.CLASSIC);

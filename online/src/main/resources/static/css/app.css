@@ -1,4 +1,5 @@
-:root {
+:root,
+:root[data-theme="dark"] {
     --bg: #1d1f23;
     --panel: #262931;
     --panel-2: #2f333c;
@@ -9,6 +10,21 @@
     --ok: #2ecc71;
     --err: #ff6b6b;
     --line: #3a3e47;
+    --light-sq: #f0d9b5;
+    --dark-sq: #b58863;
+}
+
+:root[data-theme="light"] {
+    --bg: #f5f6f8;
+    --panel: #ffffff;
+    --panel-2: #eef0f4;
+    --text: #1d1f23;
+    --muted: #5e6b7a;
+    --accent: #2f6fd6;
+    --accent-2: #1e58b8;
+    --ok: #1e9e54;
+    --err: #d63a3a;
+    --line: #d6d9e0;
     --light-sq: #f0d9b5;
     --dark-sq: #b58863;
 }
@@ -39,6 +55,12 @@ a:hover { text-decoration: underline; }
     cursor: pointer; padding: 0; font: inherit;
 }
 .topbar nav .link:hover { text-decoration: underline; }
+.topbar nav .theme-toggle {
+    font-size: 18px; line-height: 1; padding: 0 4px;
+    background: transparent; border: 0;
+    color: var(--text); opacity: 0.85;
+}
+.topbar nav .theme-toggle:hover { opacity: 1; text-decoration: none; }
 .rating-chip {
     background: var(--panel-2);
     color: var(--accent);

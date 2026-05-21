@@ -31,6 +31,11 @@ public class GameWebSocketController {
         gameService.resign(gameId, CurrentUser.displayNameOf(principal));
     }
 
+    @MessageMapping("/game/{id}/abort")
+    public void onAbort(@DestinationVariable("id") String gameId, Principal principal) {
+        gameService.requestAbort(gameId, CurrentUser.displayNameOf(principal));
+    }
+
     @MessageMapping("/game/{id}/draw/offer")
     public void onDrawOffer(@DestinationVariable("id") String gameId, Principal principal) {
         gameService.offerDraw(gameId, CurrentUser.displayNameOf(principal));

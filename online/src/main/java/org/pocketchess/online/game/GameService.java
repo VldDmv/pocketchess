@@ -310,6 +310,27 @@ public class GameService {
     //  Player actions
     // ─────────────────────────────────────────────────────────────────────
 
+    /**
+     * Voluntary abort — allowed while the game is active and fewer than
+     * two plies have been played. After move 2 the game is "in progress"
+     * and the only ways out are resign / draw / clock. Mirrors lichess.
+     */
+    public synchronized void requestAbort(String gameId, String byName) {
+        GameSession s = registry.find(gameId).orElseThrow();
+        if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
+        if (s.playerByName(byName) == null) return;
+        if (s.moveHistory().size() >= 2) {
+            sendError(gameId, byName, "Cannot abort after both sides have moved.");
+            return;
+        }
+        s.markAborted();
+        cancelFlagFall(gameId);
+        cancelAbortTimer(gameId);
+        broadcast(s, null, null);
+        pushMyGamesFor(s);
+        log.info("Game {} aborted by {}", gameId, byName);
+    }
+
     public synchronized void resign(String gameId, String byName) {
         GameSession s = registry.find(gameId).orElseThrow();
         if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
