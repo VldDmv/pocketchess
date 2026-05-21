@@ -33,6 +33,45 @@ public class LobbyService {
         messaging.convertAndSend("/topic/lobby", openGames());
     }
 
+    /** Active (incl. waiting) PvP & PvE games {@code displayName} is in. */
+    public List<MyGameRow> myActiveGamesFor(String displayName) {
+        if (displayName == null) return List.of();
+        return games.all().stream()
+                .filter(s -> !s.isReview())
+                .filter(s -> s.stage() != GameSession.LifecycleStage.FINISHED
+                          && s.stage() != GameSession.LifecycleStage.ABORTED)
+                .filter(s -> (s.white() != null && displayName.equals(s.white().name()))
+                          || (s.black() != null && displayName.equals(s.black().name())))
+                .map(s -> toMyGameRow(s, displayName))
+                .collect(Collectors.toList());
+    }
+
+    /** Push the user's "Your games" panel snapshot to their private queue. */
+    public void pushMyGamesTo(String displayName) {
+        if (displayName == null) return;
+        messaging.convertAndSendToUser(displayName, "/queue/my-games",
+                myActiveGamesFor(displayName));
+    }
+
+    private static MyGameRow toMyGameRow(GameSession s, String me) {
+        String opponent;
+        if (s.white() != null && me.equals(s.white().name())) {
+            opponent = s.black() == null ? "—" : s.black().name();
+        } else {
+            opponent = s.white() == null ? "—" : s.white().name();
+        }
+        String stage = switch (s.stage()) {
+            case WAITING_FOR_OPPONENT -> "Waiting for opponent";
+            case ACTIVE               -> "In progress";
+            case FINISHED, ABORTED    -> "Finished";
+        };
+        return new MyGameRow(s.id(), opponent, s.variant().name(),
+                s.timeControl().baseTimeSeconds(),
+                s.timeControl().incrementSeconds(),
+                s.timeControl().isUnlimited(),
+                stage);
+    }
+
     private static LobbyEntry toEntry(GameSession s) {
         String creator;
         String colour;

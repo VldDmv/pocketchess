@@ -168,6 +168,21 @@ class GameServiceLifecycleTest {
     }
 
     @Test
+    void offererCanCancelTheirOwnRematchOffer() {
+        GameSession s = service.createOpen("alice", true,
+                new TimeControl(5 * 60, 0), GameModeType.CLASSIC);
+        service.join(s, "bob");
+        service.resign(s.id(), "alice");
+
+        service.offerRematch(s.id(), "alice");
+        assertThat(s.rematchOfferBy()).isEqualTo("alice");
+
+        // Offerer hits "Cancel offer" — used to be ignored due to a stray guard.
+        service.declineRematch(s.id(), "alice");
+        assertThat(s.rematchOfferBy()).isNull();
+    }
+
+    @Test
     void pveRematchFinalisesImmediately() {
         GameSession s = service.createVsBot("alice", true,
                 new TimeControl(5 * 60, 0), GameModeType.CLASSIC, AIDifficulty.EASY);

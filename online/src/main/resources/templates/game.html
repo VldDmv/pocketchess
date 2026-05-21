@@ -47,7 +47,15 @@
             </div>
 
             <div>
-                <div class="muted" style="margin-bottom:4px">Moves</div>
+                <div class="row between" style="margin-bottom:4px">
+                    <span class="muted">Moves</span>
+                    <div class="nav-arrows" title="Use ← → keys or click to step through">
+                        <button type="button" class="icon-btn nav-btn" id="nav-first" title="Jump to start (Home)">⏮</button>
+                        <button type="button" class="icon-btn nav-btn" id="nav-prev"  title="Previous move (←)">⏴</button>
+                        <button type="button" class="icon-btn nav-btn" id="nav-next"  title="Next move (→)">⏵</button>
+                        <button type="button" class="icon-btn nav-btn" id="nav-last"  title="Jump to live (End)">⏭</button>
+                    </div>
+                </div>
                 <div id="move-list" class="move-list"></div>
             </div>
 

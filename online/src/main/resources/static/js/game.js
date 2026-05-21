@@ -352,6 +352,33 @@
         }
     }
 
+    function navByDelta(delta) {
+        if (!lastView) return;
+        const total = (lastView.moveHistory || []).length;
+        const current = replayIndex === null ? total : replayIndex;
+        const target = Math.max(0, Math.min(total, current + delta));
+        onPlyClick(target, total);
+    }
+    function navToAbs(target) {
+        if (!lastView) return;
+        const total = (lastView.moveHistory || []).length;
+        onPlyClick(Math.max(0, Math.min(total, target)), total);
+    }
+
+    document.getElementById('nav-prev') ?.addEventListener('click', () => navByDelta(-1));
+    document.getElementById('nav-next') ?.addEventListener('click', () => navByDelta(+1));
+    document.getElementById('nav-first')?.addEventListener('click', () => navToAbs(0));
+    document.getElementById('nav-last') ?.addEventListener('click', () => navToAbs(Number.MAX_SAFE_INTEGER));
+
+    document.addEventListener('keydown', e => {
+        const t = e.target;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        if (e.key === 'ArrowLeft')  { navByDelta(-1); e.preventDefault(); }
+        else if (e.key === 'ArrowRight') { navByDelta(+1); e.preventDefault(); }
+        else if (e.key === 'Home')  { navToAbs(0); e.preventDefault(); }
+        else if (e.key === 'End')   { navToAbs(Number.MAX_SAFE_INTEGER); e.preventDefault(); }
+    });
+
     function exitReplay() {
         if (replayIndex === null) return;
         replayIndex = null;
@@ -480,18 +507,17 @@
         return localStorage.getItem('pc.sound') !== 'off';
     }
 
-    // De-duplicate: if the same view (same lastMove + status) arrives twice
-    // (reconnection replay, double broadcast on rematch flip, etc.) we
-    // shouldn't fire the sound for it a second time.
-    let lastSoundKey = null;
+    // De-duplicate by the server's monotonic eventSeq — each broadcast has a
+    // unique number so reconnection replays or repeated views (same move
+    // count after undo, etc.) can't trigger the sound twice.
+    let lastSoundSeq = -1;
 
-    function playSound(name, key) {
+    function playSound(name, seq) {
         if (!name || !soundOn()) return;
-        if (key && key === lastSoundKey) return;
-        lastSoundKey = key || null;
+        if (seq != null && seq <= lastSoundSeq) return;
+        if (seq != null) lastSoundSeq = seq;
         const a = sounds[name];
         if (!a) return;
-        // Pause any in-flight playback so two rapid moves don't overlap.
         try { a.pause(); } catch (_) {}
         a.currentTime = 0;
         a.play().catch(() => {});
@@ -509,7 +535,7 @@
         const next = !soundOn();
         localStorage.setItem('pc.sound', next ? 'on' : 'off');
         refreshSoundButton();
-        if (next) { lastSoundKey = null; playSound('move', 'feedback-' + Date.now()); }
+        if (next) playSound('move', null);   // null seq → always plays
     });
     // Sync toggle across tabs of the same origin.
     window.addEventListener('storage', e => {
@@ -582,15 +608,16 @@
         renderHistoryBanner(view);
         if (replayIndex === null) redrawOverlays();
 
-        // The server sends "start" itself when both seats are filled, so we
-        // don't fire an extra one on the stage transition (that was the
-        // duplicate-sound bug). Key the play by view.lastMove + status so
-        // re-broadcasts of the same view don't replay it.
-        const key = (view.lastMove || '') + '|' + view.status + '|' + view.moveHistory.length;
-        playSound(view.soundEvent, key);
+        playSound(view.soundEvent, view.eventSeq);
     }
 
-    if (lastView) applyView(lastView);
+    if (lastView) {
+        // The initial server-rendered view has soundEvent=null, but stamp its
+        // seq so any in-flight broadcasts with the same number don't fire a
+        // late sound after the page settles.
+        if (lastView.eventSeq != null) lastSoundSeq = lastView.eventSeq;
+        applyView(lastView);
+    }
 
     // Local clock + disconnect-countdown ticker.
     setInterval(() => {

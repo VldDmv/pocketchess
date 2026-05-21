@@ -27,6 +27,12 @@ public class GameSession {
     public boolean isReview() { return review; }
     public void markReview() { this.review = true; }
 
+    /** Monotonically increases on every {@link GameView#of} call; used by the
+     *  client for sound de-duplication (same seq → ignore). */
+    private final java.util.concurrent.atomic.AtomicLong broadcastSeq =
+            new java.util.concurrent.atomic.AtomicLong();
+    public long nextBroadcastSeq() { return broadcastSeq.incrementAndGet(); }
+
     private final String id = UUID.randomUUID().toString();
     private final TimeControl timeControl;
     private final GameModeType variant;

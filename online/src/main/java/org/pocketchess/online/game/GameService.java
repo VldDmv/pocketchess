@@ -33,6 +33,7 @@ public class GameService {
     private final SimpMessagingTemplate messaging;
     private final org.pocketchess.online.service.GameHistoryService history;
     private final org.pocketchess.online.repo.UserRepository users;
+    private org.pocketchess.online.lobby.LobbyService lobby;
 
     private final ScheduledExecutorService scheduler =
             Executors.newScheduledThreadPool(2, namedDaemon("pc-flag-"));
@@ -67,6 +68,22 @@ public class GameService {
         this(registry, messaging, null, null);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setLobby(org.pocketchess.online.lobby.LobbyService lobby) {
+        this.lobby = lobby;
+    }
+
+    private void pushMyGamesFor(GameSession s) {
+        if (lobby == null) return;
+        if (s.white() != null && !s.white().bot()) lobby.pushMyGamesTo(s.white().name());
+        if (s.black() != null && !s.black().bot()) lobby.pushMyGamesTo(s.black().name());
+    }
+
+    private void pushMyGamesFor(String displayName) {
+        if (lobby == null || displayName == null) return;
+        lobby.pushMyGamesTo(displayName);
+    }
+
     private Integer ratingOf(String displayName) {
         if (users == null || displayName == null) return null;
         return users.findByDisplayName(displayName).map(u -> u.getElo()).orElse(null);
@@ -98,12 +115,14 @@ public class GameService {
 
     /** Removes any open (un-joined) challenges authored by {@code displayName}. */
     public synchronized void cancelOpenChallengesBy(String displayName) {
+        boolean removed = false;
         for (GameSession s : registry.all()) {
             if (!s.isOpenSeat()) continue;
             boolean isCreator = (s.white() != null && displayName.equals(s.white().name()))
                              || (s.black() != null && displayName.equals(s.black().name()));
-            if (isCreator) registry.remove(s.id());
+            if (isCreator) { registry.remove(s.id()); removed = true; }
         }
+        if (removed) pushMyGamesFor(displayName);
     }
 
     /**
@@ -162,6 +181,7 @@ public class GameService {
         registry.put(session);
         stampRatings(session);
         log.info("Created PvE game {} ({} vs bot/{})", session.id(), humanName, difficulty);
+        pushMyGamesFor(humanName);
 
         // Clock only starts after the first move; flag-fall is armed there.
         if (session.sideToMove().bot()) scheduleAiMove(session);
@@ -178,6 +198,7 @@ public class GameService {
         registry.put(session);
         stampRatings(session);
         log.info("Created open PvP game {} by {}", session.id(), creatorName);
+        pushMyGamesFor(creatorName);
         return session;
     }
 
@@ -197,6 +218,7 @@ public class GameService {
         stampRatings(session);
         rearmAbortTimer(session);
         broadcast(session, null, "start");
+        pushMyGamesFor(session);
         // Push redirect to both seats — the creator may still be sitting in
         // the lobby (they don't get the /topic/game/{id} broadcast there).
         notifyRedirect(session.white(), session.id());
@@ -241,7 +263,7 @@ public class GameService {
             s.markFinished();
             cancelFlagFall(s.id());
             cancelAbortTimer(s.id());
-            persistIfRated(s);
+            persistIfRated(s); pushMyGamesFor(s);
         } else {
             rearmFlagFall(s);
             rearmAbortTimer(s);
@@ -272,7 +294,7 @@ public class GameService {
                     s.markFinished();
                     cancelFlagFall(sessionId);
                     cancelAbortTimer(sessionId);
-                    persistIfRated(s);
+                    persistIfRated(s); pushMyGamesFor(s);
                 } else {
                     rearmFlagFall(s);
                     rearmAbortTimer(s);
@@ -300,7 +322,7 @@ public class GameService {
         s.markFinished();
         cancelFlagFall(gameId);
         cancelAbortTimer(gameId);
-        persistIfRated(s);
+        persistIfRated(s); pushMyGamesFor(s);
         broadcast(s, null, "checkmate");
     }
 
@@ -317,7 +339,7 @@ public class GameService {
             cancelFlagFall(gameId);
             cancelAbortTimer(gameId);
             s.clearDrawOffer();
-            persistIfRated(s);
+            persistIfRated(s); pushMyGamesFor(s);
             broadcast(s, null, "draw");
         } else {
             s.setDrawOfferBy(byName);
@@ -429,7 +451,9 @@ public class GameService {
     public synchronized void declineRematch(String gameId, String byName) {
         GameSession s = registry.find(gameId).orElseThrow();
         if (s.rematchOfferBy() == null) return;
-        if (byName.equals(s.rematchOfferBy())) return;
+        if (s.playerByName(byName) == null) return;     // not in this game
+        // Either side may clear the offer — the opponent declines it, the
+        // offerer cancels it. (Previously this returned for the offerer.)
         s.clearRematchOffer();
         broadcast(s, null, null);
     }
@@ -542,7 +566,7 @@ public class GameService {
             s.markFinished();
             cancelFlagFall(gameId);
             cancelAbortTimer(gameId);
-            persistIfRated(s);
+            persistIfRated(s); pushMyGamesFor(s);
             broadcast(s, null, "checkmate");
             log.info("Game {} forfeited — {} stayed offline for {} ms",
                     gameId, username, DISCONNECT_FORFEIT_MILLIS);
@@ -597,7 +621,7 @@ public class GameService {
             else                          s.setBlackMillisLeft(0);
             s.engine().flagFall();
             s.markFinished();
-            persistIfRated(s);
+            persistIfRated(s); pushMyGamesFor(s);
             broadcast(s, null, "checkmate");
         }
     }

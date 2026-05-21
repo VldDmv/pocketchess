@@ -222,6 +222,36 @@
             const r = JSON.parse(msg.body);
             if (r.gameId) go(r.gameId);
         });
+        // Live updates to the "Your games" panel — cancel / new / finished etc.
+        client.subscribe('/user/queue/my-games', msg => {
+            renderMyGames(JSON.parse(msg.body));
+        });
     };
     client.activate();
+
+    function renderMyGames(rows) {
+        const panel = document.getElementById('my-games-panel');
+        const tbody = document.getElementById('my-games-body');
+        const counter = document.getElementById('my-games-count');
+        if (!panel || !tbody) return;
+        if (!rows || rows.length === 0) {
+            panel.style.display = 'none';
+            return;
+        }
+        panel.style.display = '';
+        tbody.innerHTML = '';
+        counter.textContent = rows.length;
+        rows.forEach(r => {
+            const tr = document.createElement('tr');
+            const tc = formatTc({ unlimitedTime: r.unlimitedTime,
+                    baseTimeSeconds: r.baseTimeSeconds, incrementSeconds: r.incrementSeconds });
+            tr.innerHTML = `
+                <td>${escapeHtml(r.opponentName)}</td>
+                <td>${r.variant}</td>
+                <td>${tc}</td>
+                <td>${escapeHtml(r.stage)}</td>
+                <td><a class="btn primary" href="/game/${r.gameId}">Resume</a></td>`;
+            tbody.appendChild(tr);
+        });
+    }
 })();

@@ -43,7 +43,8 @@ public record GameView(
         long blackDisconnectedAt,
         long disconnectForfeitMillis,
         Integer whiteRating,
-        Integer blackRating
+        Integer blackRating,
+        long eventSeq
 ) {
 
     public static GameView of(GameSession s, String lastMove, String soundEvent) {
@@ -82,7 +83,8 @@ public record GameView(
                 s.blackDisconnectedAt(),
                 GameService.DISCONNECT_FORFEIT_MILLIS,
                 s.whiteRating(),
-                s.blackRating()
+                s.blackRating(),
+                s.nextBroadcastSeq()
         );
     }
 }
