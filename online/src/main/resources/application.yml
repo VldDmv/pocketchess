@@ -8,8 +8,12 @@ spring:
   application:
     name: pocketchess-online
 
+  # H2 file-based — data lives in ./data/pocketchess.mv.db next to the jar,
+  # so users, ratings and game history survive restarts. The directory is
+  # created on first start. AUTO_SERVER lets the H2 console (or an IDE
+  # client) attach to the same file while the app is running.
   datasource:
-    url: jdbc:h2:mem:pocketchess;DB_CLOSE_DELAY=-1
+    url: jdbc:h2:file:./data/pocketchess;AUTO_SERVER=TRUE;DB_CLOSE_DELAY=-1
     driver-class-name: org.h2.Driver
     username: sa
     password: ""

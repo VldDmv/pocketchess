@@ -1,0 +1,9 @@
+# Test-only overrides. Keeps the suite hermetic — `mvn test` never
+# touches the on-disk ./data/pocketchess file, and parallel runs of
+# different test classes don't collide on the file lock.
+spring:
+  datasource:
+    url: jdbc:h2:mem:pocketchess-test;DB_CLOSE_DELAY=-1
+  jpa:
+    hibernate:
+      ddl-auto: create-drop

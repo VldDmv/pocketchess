@@ -10,4 +10,10 @@ target/
 *.log
 *.tmp
 
+# H2 file-based database. Not source-controlled.
+data/
+*.mv.db
+*.trace.db
+*.lock.db
+
 
