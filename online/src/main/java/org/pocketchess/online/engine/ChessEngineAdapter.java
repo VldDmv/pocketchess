@@ -231,6 +231,15 @@ public class ChessEngineAdapter {
                 }
                 game.getBoard().saveAsInitial();
             }
+        } else if (temp.getGameModeType() == GameModeType.LAVA) {
+            // Carry the imported seed over to our own engine so replay produces
+            // the exact same lava waves as the original.
+            long seed = temp.getLavaManager().getSeed();
+            game.getLavaManager().reseed(seed);
+            game.resetGame(
+                    new org.pocketchess.core.game.model.TimeControl(5 * 60, 0),
+                    GameMode.PVP, Piece.Color.WHITE,
+                    aiDifficulty, GameModeType.LAVA);
         }
 
         List<String> uciMoves = new ArrayList<>(temp.getMoveHistory().size());

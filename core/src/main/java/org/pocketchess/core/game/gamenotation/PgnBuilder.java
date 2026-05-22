@@ -38,6 +38,13 @@ public final class PgnBuilder {
             pgn.append("[Variant \"Chess960\"]\n");
             pgn.append("[SetUp \"1\"]\n");
             pgn.append("[FEN \"").append(initialFen).append("\"]\n");
+        } else if (game.getGameModeType() == GameModeType.LAVA) {
+            // Lava state is non-deterministic at construction; record the RNG
+            // seed so a replay produces the exact same lava sequence.
+            pgn.append("[Variant \"Lava\"]\n");
+            pgn.append("[LavaSeed \"")
+                    .append(game.getLavaManager().getSeed())
+                    .append("\"]\n");
         }
 
         String result = PgnUtils.getResultString(game.getStatus());

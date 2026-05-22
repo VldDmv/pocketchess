@@ -357,6 +357,36 @@ class GameServiceLifecycleTest {
     }
 
     @Test
+    void pgnRoundTripsLavaVariant() {
+        // Build a lava game, capture the seeded warning pattern, export PGN,
+        // then import it back and verify the warning squares match exactly.
+        GameSession source = service.createOpen("alice", true,
+                new TimeControl(5 * 60, 0), GameModeType.LAVA);
+        service.join(source, "bob");
+        // Play a couple of moves so the resulting PGN has actual content.
+        service.applyMove(source.id(), "alice", "e2e4");
+        service.applyMove(source.id(), "bob",   "e7e5");
+
+        String pgn = source.engine().pgn("alice", "bob");
+        assertThat(pgn)
+                .as("Lava PGN includes the variant and the RNG seed")
+                .contains("[Variant \"Lava\"]")
+                .containsPattern("\\[LavaSeed \"-?\\d+\"]");
+
+        // Import → fresh review session.
+        GameSession imported = service.createPgnReview("viewer", pgn);
+
+        // The replay should land on the same position with identical lava state.
+        assertThat(imported.engine().lavaSquares())
+                .as("active lava squares match the source game")
+                .containsExactlyInAnyOrderElementsOf(source.engine().lavaSquares());
+        assertThat(imported.engine().warningSquares())
+                .as("warning squares match the source game")
+                .containsExactlyInAnyOrderElementsOf(source.engine().warningSquares());
+        assertThat(imported.moveHistory()).containsExactly("e2e4", "e7e5");
+    }
+
+    @Test
     void pgnImportAcceptsChess960Variant() {
         // A short Chess960 game from a known starting position: BRNNQKRB / brnnqkrb.
         // The PGN carries [Variant "Chess960"] and the starting [FEN ...].

@@ -21,12 +21,26 @@ public class PgnUtils {
 
     public static void loadPgn(Game game, String pgn) {
         // Extract the headers we care about BEFORE stripping them — Chess960
-        // PGNs carry the actual back-rank arrangement in [FEN "..."].
+        // PGNs carry the actual back-rank arrangement in [FEN "..."], and
+        // Lava PGNs carry the [LavaSeed "..."] used by the wave RNG so the
+        // exact lava sequence is reproducible on replay.
         String variant   = extractHeader(pgn, "Variant");
         String startFen  = extractHeader(pgn, "FEN");
+        String lavaSeed  = extractHeader(pgn, "LavaSeed");
         boolean chess960 = variant != null && variant.toLowerCase().contains("960");
+        boolean lava     = variant != null && variant.toLowerCase().contains("lava");
 
-        GameModeType gmt = chess960 ? GameModeType.CHESS960 : GameModeType.CLASSIC;
+        // Reseed the lava RNG BEFORE resetGame — resetGame's enable() draws
+        // the first wave from the seeded random.
+        if (lava && lavaSeed != null) {
+            try {
+                game.getLavaManager().reseed(Long.parseLong(lavaSeed.trim()));
+            } catch (NumberFormatException ignored) { /* fall back to default seed */ }
+        }
+
+        GameModeType gmt = chess960 ? GameModeType.CHESS960
+                          : lava     ? GameModeType.LAVA
+                          :            GameModeType.CLASSIC;
         game.resetGame(new TimeControl(500000, 0),
                 game.getGameMode(), game.getPlayerColor(),
                 AIDifficulty.MEDIUM, gmt);

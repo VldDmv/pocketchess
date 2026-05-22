@@ -42,6 +42,9 @@ public class LavaManager {
     private Set<Integer> warningSquares = new HashSet<>();
 
     private final Random random;
+    /** Seed used to construct {@link #random}; exposed so PGN export can
+     *  capture it and PGN import can reproduce the lava sequence exactly. */
+    private long seed;
     private boolean enabled;
 
     // ─────────────────────────────────────────────────────────
@@ -72,17 +75,33 @@ public class LavaManager {
     // ─────────────────────────────────────────────────────────
 
     public LavaManager() {
-        this.random  = new Random();
+        this.seed    = java.util.concurrent.ThreadLocalRandom.current().nextLong();
+        this.random  = new Random(seed);
         this.enabled = false;
     }
 
     /** Deep-copy constructor used by AI game copies */
     public LavaManager(LavaManager other) {
-        this.random        = new Random();
+        this.seed          = other.seed;
+        this.random        = new Random(other.seed);
         this.enabled       = other.enabled;
         this.lavaSquares   = new HashSet<>(other.lavaSquares);
         this.warningSquares = new HashSet<>(other.warningSquares);
     }
+
+    /**
+     * Re-initialises the internal RNG so the next sequence of waves is
+     * reproducible. PGN import uses this to replay a recorded game with
+     * the exact lava pattern from the original session.
+     */
+    public void reseed(long seed) {
+        this.seed = seed;
+        // We can't reassign `random` (final field). Instead reset its state
+        // via setSeed — Java's Random honours the new seed immediately.
+        this.random.setSeed(seed);
+    }
+
+    public long getSeed() { return seed; }
 
     // ─────────────────────────────────────────────────────────
     //  Lifecycle
