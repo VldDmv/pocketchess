@@ -93,7 +93,7 @@ class GameServiceLifecycleTest {
     // ─────────────────────────────────────────────────────────────────────
 
     @Test
-    void pvpUndoRollsBackExactlyOnePly() {
+    void pvpUndoRollsBackToRequestersOwnMove() {
         GameSession s = service.createOpen("white", true,
                 new TimeControl(5 * 60, 0), GameModeType.CLASSIC);
         service.join(s, "black");
@@ -106,8 +106,26 @@ class GameServiceLifecycleTest {
         service.requestUndo(s.id(), "black");      // black asks
         service.acceptUndo(s.id(), "white");       // white accepts
 
-        assertThat(s.moveHistory()).as("exactly one ply rolled back").hasSize(2);
-        assertThat(s.moveHistory().getLast()).isEqualTo("e7e5");
+        // Black asked, so both white's reply and black's own move come back —
+        // it's black's turn again to rethink the move they regretted.
+        assertThat(s.moveHistory())
+                .as("rolled back to before the requester's last move")
+                .containsExactly("e2e4");
+        assertThat(s.whiteToMove()).isFalse();
+    }
+
+    @Test
+    void pvpUndoOfRequestersImmediateMoveRollsBackOnePly() {
+        GameSession s = service.createOpen("white", true,
+                new TimeControl(5 * 60, 0), GameModeType.CLASSIC);
+        service.join(s, "black");
+        service.applyMove(s.id(), "white", "e2e4");
+        // White just moved and immediately regrets it (black hasn't replied).
+        service.requestUndo(s.id(), "white");
+        service.acceptUndo(s.id(), "black");
+
+        assertThat(s.moveHistory()).as("only the requester's move rolled back").isEmpty();
+        assertThat(s.whiteToMove()).isTrue();
     }
 
     @Test

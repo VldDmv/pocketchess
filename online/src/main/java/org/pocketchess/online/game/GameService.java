@@ -452,8 +452,27 @@ public class GameService {
         if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
         if (s.undoRequestBy() == null) return;
         if (byName.equals(s.undoRequestBy())) return;
+        String requester = s.undoRequestBy();
         s.clearUndoRequest();
-        performUndo(s, 1);
+        // Revert far enough that the requester's own last move is undone — so
+        // in PvP they get to re-think their move, not just erase the reply.
+        performUndo(s, pliesBackToRequestersMove(s, requester));
+    }
+
+    /**
+     * Half-moves to revert so the requester's most recent move is undone and
+     * it becomes their turn again. White plays the even-indexed plies, black
+     * the odd ones (white always opens).
+     */
+    private static int pliesBackToRequestersMove(GameSession s, String requester) {
+        int size = s.moveHistory().size();
+        if (size == 0) return 0;
+        boolean requesterIsWhite = s.white() != null && requester.equals(s.white().name());
+        int lastOwn = -1;
+        for (int i = 0; i < size; i++) {
+            if ((i % 2 == 0) == requesterIsWhite) lastOwn = i;
+        }
+        return lastOwn < 0 ? 1 : size - lastOwn;
     }
 
     public synchronized void declineUndo(String gameId, String byName) {

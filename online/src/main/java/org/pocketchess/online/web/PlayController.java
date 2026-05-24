@@ -67,7 +67,8 @@ public class PlayController {
         // Don't let the same user spam multiple open challenges — cancel any
         // existing one before creating a new one.
         gameService.cancelOpenChallengesBy(me);
-        TimeControl tc = timeControlOf(req.baseSeconds(), req.increment(), req.unlimited());
+        // Unlimited time is a vs-bot-only mode; online games are always clocked.
+        TimeControl tc = timeControlOf(req.baseSeconds(), req.increment(), false);
         GameModeType variant = GameModeType.valueOf(req.variant());
         boolean white = !"black".equalsIgnoreCase(req.color());
         GameSession s = gameService.createOpen(me, white, tc, variant);
@@ -133,7 +134,6 @@ public class PlayController {
             @NotBlank String color,
             @NotBlank String variant,
             @Min(10) Integer baseSeconds,
-            @Min(0) Integer increment,
-            Boolean unlimited
+            @Min(0) Integer increment
     ) {}
 }

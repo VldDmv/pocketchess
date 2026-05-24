@@ -24,6 +24,6 @@ public final class RatingCategory {
     public static java.util.List<String> all() {
         return java.util.List.of(
                 "ULTRABULLET", "BULLET", "BLITZ", "RAPID", "CLASSICAL",
-                "UNLIMITED", "CHESS960", "LAVA");
+                "CHESS960", "LAVA");
     }
 }
