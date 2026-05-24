@@ -160,6 +160,10 @@ public class GameService {
         registry.put(session);
 
         var results = session.engine().loadFromPgn(pgn);
+        // The engine's variant (and lava/960 starting state) is only known after
+        // loadFromPgn — fix up the ply-0 snapshot taken at construction time.
+        session.seedInitialHistory(session.engine().initialFen(),
+                session.engine().initialLava(), session.engine().initialWarning());
         for (var r : results) session.recordMove(r);
         session.markFinished();
         log.info("Loaded PGN as review session {} ({} moves)", session.id(), results.size());

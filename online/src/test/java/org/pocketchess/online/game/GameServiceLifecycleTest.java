@@ -405,6 +405,48 @@ class GameServiceLifecycleTest {
     }
 
     @Test
+    void lavaHistoryTracksPerPlyState() {
+        // A lava wave fires every 6 half-moves. The per-ply history must show
+        // an empty board early and active lava once the first interval lands,
+        // so scrubbing back in the replay shows the lava that was on the board
+        // at that point.
+        GameSession s = service.createOpen("alice", true,
+                new TimeControl(5 * 60, 0), GameModeType.LAVA);
+        service.join(s, "bob");
+        String[] ucis = {"e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "g8f6"};
+        String[] who  = {"alice", "bob", "alice", "bob", "alice", "bob"};
+        for (int i = 0; i < ucis.length; i++) service.applyMove(s.id(), who[i], ucis[i]);
+
+        assertThat(s.lavaHistory()).hasSize(7);          // ply 0..6
+        assertThat(s.warningHistory().get(0)).as("blue warnings present from the start").isNotEmpty();
+        assertThat(s.lavaHistory().get(0)).as("no red lava at the start").isEmpty();
+        assertThat(s.lavaHistory().get(6)).as("lava active after the first 6-ply interval").isNotEmpty();
+    }
+
+    @Test
+    void lavaHistoryRoundTripsThroughPgnReview() {
+        GameSession source = service.createOpen("alice", true,
+                new TimeControl(5 * 60, 0), GameModeType.LAVA);
+        service.join(source, "bob");
+        String[] ucis = {"e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "g8f6"};
+        String[] who  = {"alice", "bob", "alice", "bob", "alice", "bob"};
+        for (int i = 0; i < ucis.length; i++) service.applyMove(source.id(), who[i], ucis[i]);
+
+        GameSession review = service.createPgnReview("viewer", source.engine().pgn("alice", "bob"));
+
+        assertThat(review.lavaHistory()).hasSameSizeAs(source.lavaHistory());
+        for (int i = 0; i < source.lavaHistory().size(); i++) {
+            assertThat(review.lavaHistory().get(i))
+                    .as("ply %d lava matches the original", i)
+                    .containsExactlyInAnyOrderElementsOf(source.lavaHistory().get(i));
+            assertThat(review.warningHistory().get(i))
+                    .as("ply %d warnings match the original", i)
+                    .containsExactlyInAnyOrderElementsOf(source.warningHistory().get(i));
+        }
+        assertThat(source.lavaHistory().get(6)).as("the wave fired by ply 6").isNotEmpty();
+    }
+
+    @Test
     void pgnImportAcceptsChess960Variant() {
         // A short Chess960 game from a known starting position: BRNNQKRB / brnnqkrb.
         // The PGN carries [Variant "Chess960"] and the starting [FEN ...].

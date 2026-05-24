@@ -210,26 +210,35 @@
         clearOverlays();
         if (!lastView) return;
 
-        // Last move highlight.
-        if (lastView.lastMove && typeof lastView.lastMove === 'string'
-                && lastView.lastMove.length >= 4) {
-            const from = lastView.lastMove.slice(0, 2);
-            const to   = lastView.lastMove.slice(2, 4);
-            $('#board .square-' + from).addClass('last-move-square');
-            $('#board .square-' + to  ).addClass('last-move-square');
+        const inReplay = replayIndex !== null;
+        const ply = inReplay ? replayIndex : (lastView.moveHistory || []).length;
+
+        // Last move highlight — the move that led to the viewed position.
+        const lastMv = inReplay
+                ? (lastView.moveHistory || [])[ply - 1]
+                : lastView.lastMove;
+        if (lastMv && typeof lastMv === 'string' && lastMv.length >= 4) {
+            $('#board .square-' + lastMv.slice(0, 2)).addClass('last-move-square');
+            $('#board .square-' + lastMv.slice(2, 4)).addClass('last-move-square');
         }
 
-        // Check highlight.
-        if (lastView.kingInCheckSquare) {
+        // Check highlight — only meaningful for the live position.
+        if (!inReplay && lastView.kingInCheckSquare) {
             $('#board .square-' + lastView.kingInCheckSquare).addClass('check-square');
         }
 
-        // Lava — active and pending.
-        (lastView.lavaSquares    || []).forEach(sq => $('#board .square-' + sq).addClass('lava-square'));
-        (lastView.warningSquares || []).forEach(sq => $('#board .square-' + sq).addClass('lava-warning-square'));
+        // Lava — per-ply when scrubbing history, otherwise the live state.
+        const lava = inReplay
+                ? ((lastView.lavaHistory || [])[ply] || [])
+                : (lastView.lavaSquares || []);
+        const warn = inReplay
+                ? ((lastView.warningHistory || [])[ply] || [])
+                : (lastView.warningSquares || []);
+        lava.forEach(sq => $('#board .square-' + sq).addClass('lava-square'));
+        warn.forEach(sq => $('#board .square-' + sq).addClass('lava-warning-square'));
 
-        // Selection + legal targets.
-        if (selectedSq) {
+        // Selection + legal targets — live play only.
+        if (!inReplay && selectedSq) {
             $('#board .square-' + selectedSq).addClass('selected-square');
             const targets = (lastView.legalMoves || [])
                 .filter(uci => uci.slice(0, 2) === selectedSq);
@@ -383,16 +392,11 @@
         if (!lastView || !lastView.fenHistory || plyIndex < 0
                 || plyIndex >= lastView.fenHistory.length) return;
         replayIndex = plyIndex;
-        clearSelection();
+        selectedSq = null;
         board.position(fenBoardOnly(lastView.fenHistory[plyIndex]), true);
         renderMoves(lastView);
         renderHistoryBanner(lastView);
-        clearOverlays();
-        const uci = (lastView.moveHistory || [])[plyIndex - 1];
-        if (uci && uci.length >= 4) {
-            $('#board .square-' + uci.slice(0, 2)).addClass('last-move-square');
-            $('#board .square-' + uci.slice(2, 4)).addClass('last-move-square');
-        }
+        redrawOverlays();   // replay-aware: draws this ply's lava + last move
     }
 
     function navByDelta(delta) {

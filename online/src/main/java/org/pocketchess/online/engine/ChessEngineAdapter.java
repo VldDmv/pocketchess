@@ -43,6 +43,12 @@ public class ChessEngineAdapter {
     private final ChessNotationFormatter notationFormatter;
     private final FastMoveGenerator moveGenerator = new FastMoveGenerator();
 
+    // Initial (pre-move) position captured during loadFromPgn, after the
+    // variant / lava seed is applied. Lets the session seed its ply-0 history.
+    private String initialFen;
+    private List<String> initialLava = List.of();
+    private List<String> initialWarning = List.of();
+
     private ChessEngineAdapter(Game game, AIDifficulty aiDifficulty) {
         this.game = game;
         this.aiDifficulty = aiDifficulty;
@@ -248,6 +254,13 @@ public class ChessEngineAdapter {
                     aiDifficulty, GameModeType.LAVA);
         }
 
+        // Snapshot the initial (pre-move) position now that the variant — and
+        // its lava seed / Chess960 back-rank — is set up, so the caller can seed
+        // the ply-0 entry of its replay history correctly.
+        this.initialFen = fen();
+        this.initialLava = lavaSquares();
+        this.initialWarning = warningSquares();
+
         boolean chess960 = temp.getGameModeType() == GameModeType.CHESS960;
         List<String> uciMoves = new ArrayList<>(temp.getMoveHistory().size());
         for (Move m : temp.getMoveHistory()) {
@@ -274,6 +287,13 @@ public class ChessEngineAdapter {
         }
         return out;
     }
+
+    /** Initial-position FEN captured by the most recent {@link #loadFromPgn}. */
+    public String initialFen() { return initialFen == null ? fen() : initialFen; }
+    /** Initial-position lava squares captured by the most recent {@link #loadFromPgn}. */
+    public List<String> initialLava() { return initialLava; }
+    /** Initial-position warning squares captured by the most recent {@link #loadFromPgn}. */
+    public List<String> initialWarning() { return initialWarning; }
 
     private static String toSquareName(int row, int col) {
         return "" + (char) ('a' + col) + (8 - row);
@@ -327,7 +347,8 @@ public class ChessEngineAdapter {
             game.promotePawn(promo);
         }
 
-        return MoveResult.ok(uci, fen(), game.getStatus(), game.isWhiteTurn());
+        return MoveResult.ok(uci, fen(), game.getStatus(), game.isWhiteTurn(),
+                lavaSquares(), warningSquares());
     }
 
     /**
@@ -379,11 +400,13 @@ public class ChessEngineAdapter {
             // animates the castle consistently.
             String castleUci = "" + (char) ('a' + best.start.getY()) + (8 - best.start.getX())
                                   + (char) ('a' + best.chess960RookFromCol) + (8 - best.start.getX());
-            return MoveResult.ok(castleUci, fen(), game.getStatus(), game.isWhiteTurn());
+            return MoveResult.ok(castleUci, fen(), game.getStatus(), game.isWhiteTurn(),
+                    lavaSquares(), warningSquares());
         }
 
         return MoveResult.ok(UciMove.fromMove(best, promoSuffix),
-                fen(), game.getStatus(), game.isWhiteTurn());
+                fen(), game.getStatus(), game.isWhiteTurn(),
+                lavaSquares(), warningSquares());
     }
 
     private static Piece promotionPiece(Character suffix, boolean isWhite) {

@@ -40,6 +40,8 @@ public class GameSession {
     private final ChessEngineAdapter engine;
     private final List<String> moveHistory = new ArrayList<>();
     private final List<String> fenHistory = new ArrayList<>();
+    private final List<List<String>> lavaHistory = new ArrayList<>();      // red squares per ply
+    private final List<List<String>> warningHistory = new ArrayList<>();   // blue squares per ply
     private final List<ChatLine> chat = new ArrayList<>();
 
     private Player white;
@@ -92,6 +94,8 @@ public class GameSession {
         this.turnStartMillis = 0L;
         this.clockRunning = false;
         this.fenHistory.add(engine.fen());           // ply 0 — the starting position
+        this.lavaHistory.add(engine.lavaSquares());  // lava/warning at the starting position
+        this.warningHistory.add(engine.warningSquares());
     }
 
     public String id() { return id; }
@@ -103,6 +107,8 @@ public class GameSession {
     public ChessEngineAdapter engine() { return engine; }
     public List<String> moveHistory() { return moveHistory; }
     public List<String> fenHistory() { return fenHistory; }
+    public List<List<String>> lavaHistory() { return lavaHistory; }
+    public List<List<String>> warningHistory() { return warningHistory; }
     public List<ChatLine> chat() { return chat; }
     public LifecycleStage stage() { return stage; }
     public String drawOfferBy() { return drawOfferBy; }
@@ -227,9 +233,22 @@ public class GameSession {
     void setWhiteDisconnectedAt(long t) { this.whiteDisconnectedAt = t; }
     void setBlackDisconnectedAt(long t) { this.blackDisconnectedAt = t; }
 
+    /**
+     * Overwrites the ply-0 history entry. Used by PGN review, where the session
+     * is constructed before the engine's variant (and its lava seed / Chess960
+     * back-rank) is known, so the starting snapshot has to be corrected.
+     */
+    void seedInitialHistory(String fen, List<String> lava, List<String> warning) {
+        fenHistory.set(0, fen);
+        lavaHistory.set(0, lava);
+        warningHistory.set(0, warning);
+    }
+
     void recordMove(MoveResult mr) {
         moveHistory.add(mr.uci());
         fenHistory.add(mr.fen());
+        lavaHistory.add(mr.lavaSquares());
+        warningHistory.add(mr.warningSquares());
     }
 
     void rollbackLastMove() {
@@ -238,6 +257,12 @@ public class GameSession {
         }
         if (fenHistory.size() > 1) {
             fenHistory.remove(fenHistory.size() - 1);
+        }
+        if (lavaHistory.size() > 1) {
+            lavaHistory.remove(lavaHistory.size() - 1);
+        }
+        if (warningHistory.size() > 1) {
+            warningHistory.remove(warningHistory.size() - 1);
         }
     }
 

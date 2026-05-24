@@ -38,6 +38,8 @@ public record GameView(
         List<String> legalMoves,           // every legal half-move for the side to move, in UCI
         List<String> lavaSquares,
         List<String> warningSquares,
+        List<List<String>> lavaHistory,        // red squares per ply (index = ply) for replay
+        List<List<String>> warningHistory,     // blue squares per ply for replay
         String kingInCheckSquare,
         long whiteDisconnectedAt,
         long blackDisconnectedAt,
@@ -80,6 +82,8 @@ public record GameView(
                 s.engine().legalMoves(),
                 s.engine().lavaSquares(),
                 s.engine().warningSquares(),
+                List.copyOf(s.lavaHistory()),
+                List.copyOf(s.warningHistory()),
                 s.engine().kingInCheckSquare(),
                 s.whiteDisconnectedAt(),
                 s.blackDisconnectedAt(),
