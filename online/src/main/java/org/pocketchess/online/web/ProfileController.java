@@ -40,13 +40,21 @@ public class ProfileController {
             }
         }
 
+        List<RatingRow> ratings = org.pocketchess.online.service.RatingCategory.all().stream()
+                .filter(c -> user.getRatings().containsKey(c))
+                .map(c -> new RatingRow(c, user.getRating(c)))
+                .toList();
+
         model.addAttribute("user", user);
+        model.addAttribute("ratings", ratings);
         model.addAttribute("recent", recent.stream().map(g -> ProfileRow.of(g, user)).toList());
         model.addAttribute("wins", wins);
         model.addAttribute("losses", losses);
         model.addAttribute("draws", draws);
         return "profile";
     }
+
+    public record RatingRow(String category, int rating) {}
 
     public record ProfileRow(
             String sessionId,

@@ -49,8 +49,8 @@ class GameHistoryServiceTest {
         // wait — she's the resigner, so she loses 16 and bob gains 16 at 1200/1200.
         User aliceNow = users.findByDisplayName("alice").orElseThrow();
         User bobNow   = users.findByDisplayName("bob").orElseThrow();
-        assertThat(aliceNow.getElo()).isEqualTo(1184);
-        assertThat(bobNow.getElo()).isEqualTo(1216);
+        assertThat(aliceNow.getRating("BLITZ")).isEqualTo(1184);
+        assertThat(bobNow.getRating("BLITZ")).isEqualTo(1216);
 
         List<GameRecord> recent = records.findRecentByUser(aliceNow,
                 org.springframework.data.domain.PageRequest.of(0, 5));
@@ -80,8 +80,8 @@ class GameHistoryServiceTest {
         // Invoke a second time directly — must not double-apply the Elo swing.
         history.recordTerminal(s);
 
-        assertThat(users.findByDisplayName("carol").orElseThrow().getElo()).isEqualTo(1516);
-        assertThat(users.findByDisplayName("dave" ).orElseThrow().getElo()).isEqualTo(1484);
+        assertThat(users.findByDisplayName("carol").orElseThrow().getRating("BLITZ")).isEqualTo(1516);
+        assertThat(users.findByDisplayName("dave" ).orElseThrow().getRating("BLITZ")).isEqualTo(1484);
         assertThat(records.findBySessionId(s.id())).isPresent();
     }
 
@@ -94,7 +94,7 @@ class GameHistoryServiceTest {
                 new TimeControl(300, 0), GameModeType.CLASSIC, AIDifficulty.EASY);
         svc.resign(s.id(), "eve");
 
-        assertThat(users.findByDisplayName("eve").orElseThrow().getElo())
+        assertThat(users.findByDisplayName("eve").orElseThrow().getRating("BLITZ"))
                 .as("PvE games should not move the human's rating")
                 .isEqualTo(1400);
         assertThat(records.findBySessionId(s.id()))
@@ -106,7 +106,7 @@ class GameHistoryServiceTest {
         User u = new User();
         u.setDisplayName(name);
         u.setPasswordHash("x");
-        u.setElo(rating);
+        u.setRating("BLITZ", rating);
         return users.save(u);
     }
 }

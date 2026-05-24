@@ -49,6 +49,8 @@ public class GameRecord {
     @Column(nullable = false) private int incrementSeconds;
     @Column(nullable = false) private boolean unlimitedTime;
     @Column(nullable = false) private String variant;
+    /** Rating bucket this game counted toward (BLITZ, CHESS960, LAVA, …). */
+    @Column(nullable = false) private String category;
 
     @Column(nullable = false) private int whiteEloBefore;
     @Column(nullable = false) private int blackEloBefore;
@@ -82,6 +84,8 @@ public class GameRecord {
     public void setUnlimitedTime(boolean unlimitedTime) { this.unlimitedTime = unlimitedTime; }
     public String getVariant() { return variant; }
     public void setVariant(String variant) { this.variant = variant; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
     public int getWhiteEloBefore() { return whiteEloBefore; }
     public void setWhiteEloBefore(int whiteEloBefore) { this.whiteEloBefore = whiteEloBefore; }
     public int getBlackEloBefore() { return blackEloBefore; }

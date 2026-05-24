@@ -12,14 +12,20 @@
                 </p>
             </div>
             <div class="rating-block">
-                <div class="rating-value" th:text="${user.elo}">1200</div>
-                <div class="muted" style="font-size:12px">Rating</div>
+                <div class="rating-value" th:text="${user.headlineRating}">1200</div>
+                <div class="muted" style="font-size:12px">Top rating</div>
             </div>
         </div>
         <div class="row" style="gap: 22px; margin-top: 16px">
             <div><span class="muted">Wins</span> <strong th:text="${wins}">0</strong></div>
             <div><span class="muted">Losses</span> <strong th:text="${losses}">0</strong></div>
             <div><span class="muted">Draws</span> <strong th:text="${draws}">0</strong></div>
+        </div>
+        <div class="row" style="gap: 12px; margin-top: 16px; flex-wrap: wrap" th:if="${!ratings.empty}">
+            <div class="cat-rating" th:each="rt : ${ratings}">
+                <span class="muted" style="font-size:11px; text-transform:uppercase" th:text="${rt.category}">BLITZ</span>
+                <strong th:text="${rt.rating}">1200</strong>
+            </div>
         </div>
     </section>
 

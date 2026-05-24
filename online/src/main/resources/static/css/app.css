@@ -74,6 +74,11 @@ a:hover { text-decoration: underline; }
 .profile-summary { background: var(--panel); }
 .rating-block { text-align: right; }
 .rating-block .rating-value { font-size: 32px; font-weight: 700; color: var(--accent); }
+.cat-rating {
+    display: flex; flex-direction: column; gap: 2px;
+    padding: 6px 12px; border-radius: 8px;
+    background: rgba(255, 255, 255, .04); min-width: 70px;
+}
 .result-pill {
     display: inline-block; padding: 2px 8px; border-radius: 999px;
     font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase;

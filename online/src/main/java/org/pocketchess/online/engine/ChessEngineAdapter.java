@@ -158,11 +158,18 @@ public class ChessEngineAdapter {
     /** Every legal half-move available to the side to move, in UCI form. */
     public List<String> legalMoves() {
         if (isGameOver()) return List.of();
-        List<Move> moves = moveGenerator.generateMoves(game);
+        boolean chess960 = game.getGameModeType() == GameModeType.CHESS960;
+        List<Move> moves = moveGenerator.generateLegalMoves(game);   // exact rules: warnings passable
         List<String> out = new ArrayList<>(moves.size());
-        boolean seenPromo = false;
         for (Move m : moves) {
             if (m.start == null || m.end == null) continue;
+            // Chess960 castling is expressed as "king takes rook" so the move
+            // is unambiguous when the king starts on/next to its castled square.
+            if (chess960 && m.wasCastlingMove && m.chess960RookFromCol >= 0) {
+                out.add("" + (char) ('a' + m.start.getY()) + (8 - m.start.getX())
+                          + (char) ('a' + m.chess960RookFromCol) + (8 - m.start.getX()));
+                continue;
+            }
             boolean isPawnMove = m.pieceMoved instanceof Pawn;
             boolean toBackRank = m.end.getX() == 0 || m.end.getX() == 7;
             if (isPawnMove && toBackRank) {
@@ -172,7 +179,6 @@ public class ChessEngineAdapter {
                 out.add(base + "r");
                 out.add(base + "b");
                 out.add(base + "n");
-                seenPromo = true;
             } else {
                 out.add(uciOf(m));
             }

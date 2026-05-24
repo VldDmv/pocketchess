@@ -25,6 +25,6 @@ public class GlobalModelAdvice {
     public Integer currentElo(Principal principal) {
         String name = CurrentUser.displayNameOf(principal);
         if (name == null) return null;
-        return users.findByDisplayName(name).map(u -> u.getElo()).orElse(null);
+        return users.findByDisplayName(name).map(u -> u.getHeadlineRating()).orElse(null);
     }
 }

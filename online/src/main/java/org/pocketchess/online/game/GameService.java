@@ -84,14 +84,15 @@ public class GameService {
         lobby.pushMyGamesTo(displayName);
     }
 
-    private Integer ratingOf(String displayName) {
+    private Integer ratingOf(String displayName, String category) {
         if (users == null || displayName == null) return null;
-        return users.findByDisplayName(displayName).map(u -> u.getElo()).orElse(null);
+        return users.findByDisplayName(displayName).map(u -> u.getRating(category)).orElse(null);
     }
 
     private void stampRatings(GameSession s) {
-        if (s.white() != null && !s.white().bot()) s.setWhiteRating(ratingOf(s.white().name()));
-        if (s.black() != null && !s.black().bot()) s.setBlackRating(ratingOf(s.black().name()));
+        String category = org.pocketchess.online.service.RatingCategory.of(s.variant(), s.timeControl());
+        if (s.white() != null && !s.white().bot()) s.setWhiteRating(ratingOf(s.white().name(), category));
+        if (s.black() != null && !s.black().bot()) s.setBlackRating(ratingOf(s.black().name(), category));
     }
 
     private void persistIfRated(GameSession s) {

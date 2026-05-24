@@ -57,7 +57,7 @@ public class PgnUtils {
 
         for (String moveSan : moves) {
             if (moveSan.isEmpty()) continue;
-            List<Move> legalMoves = moveGenerator.generateMoves(game);
+            List<Move> legalMoves = moveGenerator.generateLegalMoves(game);
             Move moveToDo = findMoveBySan(legalMoves, moveSan);
 
             if (moveToDo != null) {

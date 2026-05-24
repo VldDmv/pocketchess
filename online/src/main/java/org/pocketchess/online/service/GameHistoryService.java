@@ -53,14 +53,15 @@ public class GameHistoryService {
             return;
         }
 
-        int whiteBefore = white.getElo();
-        int blackBefore = black.getElo();
+        String category = RatingCategory.of(session.variant(), session.timeControl());
+        int whiteBefore = white.getRating(category);
+        int blackBefore = black.getRating(category);
         int[] after = elo.apply(whiteBefore, blackBefore, whiteScore);
         // Berserk bonus: +1 if the berserker won outright. Matches lichess.
         if (session.whiteBerserked() && whiteScore == 1.0) after[0] += 1;
         if (session.blackBerserked() && whiteScore == 0.0) after[1] += 1;
-        white.setElo(after[0]);
-        black.setElo(after[1]);
+        white.setRating(category, after[0]);
+        black.setRating(category, after[1]);
 
         GameRecord r = new GameRecord();
         r.setSessionId(session.id());
@@ -72,6 +73,7 @@ public class GameHistoryService {
         r.setIncrementSeconds(session.timeControl().incrementSeconds());
         r.setUnlimitedTime(session.timeControl().isUnlimited());
         r.setVariant(session.variant().name());
+        r.setCategory(category);
         r.setWhiteEloBefore(whiteBefore);
         r.setBlackEloBefore(blackBefore);
         r.setWhiteEloAfter(after[0]);
