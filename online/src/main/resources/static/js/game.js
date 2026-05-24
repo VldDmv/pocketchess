@@ -104,7 +104,31 @@
         redrawOverlays();
     }
 
+    /**
+     * Chess960 castles are sent as "king takes rook". Let the player drop the
+     * king on either the rook OR its natural castled square (c/g-file) and map
+     * both to the canonical king→rook UCI the server expects.
+     */
+    function resolveCastleTarget(from, to, piece) {
+        if (!piece || piece[1] !== 'K' || !lastView) return to;
+        const rank = from[1];
+        const kingFile = from.charCodeAt(0);
+        const colourPrefix = myColour === 'white' ? 'w' : 'b';
+        const castleUcis = (lastView.legalMoves || []).filter(u => {
+            if (u.slice(0, 2) !== from) return false;
+            const tgt = pieceOn(u.slice(2, 4), lastView.fen);
+            return tgt && tgt[1] === 'R' && tgt[0] === colourPrefix;   // own rook
+        });
+        for (const u of castleUcis) {
+            const rookSq = u.slice(2, 4);
+            const kingDestSq = (rookSq.charCodeAt(0) > kingFile ? 'g' : 'c') + rank;
+            if (to === rookSq || to === kingDestSq) return rookSq;
+        }
+        return to;
+    }
+
     async function sendMove(from, to, piece) {
+        to = resolveCastleTarget(from, to, piece);
         let promo = null;
         const isWhitePawn = piece === 'wP';
         const isBlackPawn = piece === 'bP';
@@ -209,11 +233,24 @@
             $('#board .square-' + selectedSq).addClass('selected-square');
             const targets = (lastView.legalMoves || [])
                 .filter(uci => uci.slice(0, 2) === selectedSq);
+            const sourcePiece = pieceOn(selectedSq, lastView.fen);
+            const colourPrefix = myColour === 'white' ? 'w' : 'b';
             targets.forEach(uci => {
                 const tgt = uci.slice(2, 4);
-                const captured = !!pieceOn(tgt, lastView.fen);
+                const tgtPiece = pieceOn(tgt, lastView.fen);
+                const captured = !!tgtPiece;
+                // Chess960 castle: target is the king's own rook. Mark the king's
+                // castled square (c/g-file) as a normal move dot instead, so the
+                // player can drop the king there too.
+                const isCastle = sourcePiece && sourcePiece[1] === 'K'
+                        && tgtPiece && tgtPiece[1] === 'R' && tgtPiece[0] === colourPrefix;
+                if (isCastle) {
+                    const kingDest = (tgt.charCodeAt(0) > selectedSq.charCodeAt(0) ? 'g' : 'c') + tgt[1];
+                    $('#board .square-' + kingDest).addClass('legal-move-dot');
+                    $('#board .square-' + tgt).addClass('legal-move-dot');
+                    return;
+                }
                 // En passant: pawn captures sideways onto empty square — still mark as capture.
-                const sourcePiece = pieceOn(selectedSq, lastView.fen);
                 const isPawn = sourcePiece && sourcePiece[1] === 'P';
                 const isDiagonal = selectedSq[0] !== tgt[0];
                 const enPassant = isPawn && isDiagonal && !captured;

@@ -61,60 +61,77 @@ public class PgnUtils {
             Move moveToDo = findMoveBySan(legalMoves, moveSan);
 
             if (moveToDo != null) {
-                game.playerMove(moveToDo.start.getX(), moveToDo.start.getY(),
-                        moveToDo.end.getX(), moveToDo.end.getY(),
-                        moveToDo.promotedTo);
+                if (moveToDo.wasCastlingMove && moveToDo.chess960RookFromCol >= 0) {
+                    // Apply as king-takes-rook so castling works for any king
+                    // file — the king→g/c-file form only registers as a castle
+                    // when the king travels more than one square.
+                    game.playerMove(moveToDo.start.getX(), moveToDo.start.getY(),
+                            moveToDo.start.getX(), moveToDo.chess960RookFromCol, null);
+                } else {
+                    game.playerMove(moveToDo.start.getX(), moveToDo.start.getY(),
+                            moveToDo.end.getX(), moveToDo.end.getY(),
+                            moveToDo.promotedTo);
+                }
             } else {
                 throw new IllegalArgumentException("Invalid SAN move: " + moveSan);
             }
         }
     }
 
+    /** [piece]?[disambiguation]?[x]?dest[=promo]? — the standard SAN body. */
+    private static final Pattern SAN =
+            Pattern.compile("^([KQRBN])?([a-h]?[1-8]?)x?([a-h][1-8])=?([QRBN])?$");
+
     private static Move findMoveBySan(List<Move> legalMoves, String san) {
-        san = san.replaceAll("[+#]", ""); // Remove check and checkmate symbols
+        san = san.replaceAll("[+#]", "").replace("0", "O");   // strip check marks; 0-0 → O-O
 
-        List<Move> candidates = new ArrayList<>();
-
-        for (Move move : legalMoves) {
-            // Generate simple notation for each legal move
-            String simpleSan = generateSimpleNotation(move);
-
-            if (simpleSan.equals(san)) {
-                return move;
+        // Castling — match by the canonical O-O / O-O-O form.
+        if (san.equals("O-O") || san.equals("O-O-O")) {
+            for (Move m : legalMoves) {
+                if (m.wasCastlingMove && generateSimpleNotation(m).equals(san)) return m;
             }
-
-            // Check if the move matches ambiguous notation (e.g., "Nbc6")
-            boolean b = simpleSan.endsWith(san.substring(san.length() - 2));
-            if (move.pieceMoved instanceof Knight && san.startsWith("N") && b) {
-                candidates.add(move);
-            }
-            if (move.pieceMoved instanceof Rook && san.startsWith("R") && b) {
-                candidates.add(move);
-            }
+            return null;
         }
 
-        if (candidates.size() == 1) {
-            return candidates.get(0);
+        // Fast path: an unambiguous move whose generated notation matches exactly.
+        for (Move m : legalMoves) {
+            if (generateSimpleNotation(m).equals(san)) return m;
         }
 
-        if (candidates.size() > 1 && san.length() >= 4) {
-            char disambiguationChar = san.charAt(1);
-            for (Move candidate : candidates) {
-                if (getCoords(candidate.start).charAt(0) == disambiguationChar) {
-                    return candidate;
-                }
-                if (getCoords(candidate.start).charAt(1) == disambiguationChar) {
-                    return candidate;
-                }
+        // General path: parse the SAN and match piece + destination, then apply
+        // any file/rank disambiguation. This tolerates extra disambiguation that
+        // some exporters add (e.g. a king move written "Kbb8").
+        Matcher mt = SAN.matcher(san);
+        if (!mt.matches()) return null;
+        String pieceLetter = mt.group(1) == null ? "" : mt.group(1);
+        String disambig    = mt.group(2) == null ? "" : mt.group(2);
+        String dest        = mt.group(3);
+        String promo       = mt.group(4);
+
+        for (Move m : legalMoves) {
+            if (!getPieceSymbol(m.pieceMoved).equals(pieceLetter)) continue;
+            if (!getCoords(m.end).equals(dest)) continue;
+            if (promo != null && (m.promotedTo == null
+                    || !getPieceSymbol(m.promotedTo).equals(promo))) continue;
+
+            String from = getCoords(m.start);     // e.g. "b7"
+            boolean matches = true;
+            for (char ch : disambig.toCharArray()) {
+                if (Character.isDigit(ch)) { if (from.charAt(1) != ch) matches = false; }
+                else                       { if (from.charAt(0) != ch) matches = false; }
             }
+            if (matches) return m;
         }
-
         return null; // Move not found
     }
 
     private static String generateSimpleNotation(Move move) {
         if (move.wasCastlingMove) {
-            return move.end.getY() > move.start.getY() ? "O-O" : "O-O-O";
+            // Kingside is always the col-6 (g-file) destination; queenside is
+            // col 2. Comparing king start vs end breaks in Chess960 when the
+            // king starts left of centre (e.g. b-file), where the queenside
+            // target c-file is to its right.
+            return move.end.getY() == 6 ? "O-O" : "O-O-O";
         }
         String pieceSymbol = getPieceSymbol(move.pieceMoved);
         String captureSymbol = move.pieceKilled != null ? "x" : "";

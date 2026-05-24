@@ -248,8 +248,16 @@ public class ChessEngineAdapter {
                     aiDifficulty, GameModeType.LAVA);
         }
 
+        boolean chess960 = temp.getGameModeType() == GameModeType.CHESS960;
         List<String> uciMoves = new ArrayList<>(temp.getMoveHistory().size());
         for (Move m : temp.getMoveHistory()) {
+            // Chess960 castles must replay as king-takes-rook so they apply for
+            // any king file (king→g/c-file only works when the king moves >1 sq).
+            if (chess960 && m.wasCastlingMove && m.chess960RookFromCol >= 0) {
+                uciMoves.add("" + (char) ('a' + m.start.getY()) + (8 - m.start.getX())
+                              + (char) ('a' + m.chess960RookFromCol) + (8 - m.start.getX()));
+                continue;
+            }
             char promo = m.promotedTo != null ? pieceLetter(m.promotedTo) : 0;
             String uci = UciMove.fromMove(m, promo == 0 ? null : promo);
             uciMoves.add(uci);
@@ -338,9 +346,22 @@ public class ChessEngineAdapter {
         }
 
         boolean moverIsWhite = game.isWhiteTurn();
-        boolean accepted = game.playerMove(
-                best.start.getX(), best.start.getY(),
-                best.end.getX(), best.end.getY());
+        boolean chess960Castle = game.getGameModeType() == GameModeType.CHESS960
+                && best.wasCastlingMove && best.chess960RookFromCol >= 0;
+
+        boolean accepted;
+        if (chess960Castle) {
+            // Apply as king-takes-rook so the engine's Chess960 castling path
+            // runs regardless of the king's starting file (the king→g/c-file
+            // shortcut only works when the king travels more than one square).
+            accepted = game.playerMove(
+                    best.start.getX(), best.start.getY(),
+                    best.start.getX(), best.chess960RookFromCol);
+        } else {
+            accepted = game.playerMove(
+                    best.start.getX(), best.start.getY(),
+                    best.end.getX(), best.end.getY());
+        }
         if (!accepted) {
             return MoveResult.reject("Engine produced illegal move: " + UciMove.fromMove(best));
         }
@@ -351,6 +372,14 @@ public class ChessEngineAdapter {
                     ? pieceLetter(best.promotedTo) : 'q';
             game.promotePawn(promotionPiece(suffix, moverIsWhite));
             promoSuffix = suffix;
+        }
+
+        if (chess960Castle) {
+            // Report the same king→rook UCI the human path uses, so the client
+            // animates the castle consistently.
+            String castleUci = "" + (char) ('a' + best.start.getY()) + (8 - best.start.getX())
+                                  + (char) ('a' + best.chess960RookFromCol) + (8 - best.start.getX());
+            return MoveResult.ok(castleUci, fen(), game.getStatus(), game.isWhiteTurn());
         }
 
         return MoveResult.ok(UciMove.fromMove(best, promoSuffix),

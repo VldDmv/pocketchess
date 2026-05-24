@@ -122,7 +122,20 @@ public class PlayerMoveService {
         Spot endSpot = board.getBox(endX, endY);
         Piece sourcePiece = startSpot.getPiece();
 
-        boolean isCastling = (sourcePiece instanceof King) && Math.abs(endY - startY) == 2;
+        boolean isCastling = false;
+        if (sourcePiece instanceof King) {
+            Piece targetPiece = endSpot.getPiece();
+            // King-takes-rook (Chess960 / PGN replay) — works for any king file.
+            if (targetPiece instanceof Rook && targetPiece.isWhite() == sourcePiece.isWhite()
+                    && !((King) sourcePiece).hasMoved()) {
+                isCastling = true;
+                int direction = (endY > startY) ? 1 : -1;
+                endY = (direction > 0) ? 6 : 2;
+                endSpot = board.getBox(endX, endY);
+            } else if (Math.abs(endY - startY) == 2) {   // king travels two files
+                isCastling = true;
+            }
+        }
         Move move = moveExecutor.createAndExecuteMove(
                 startSpot, endSpot, isCastling, positionTracker.getHalfMoves()
         );

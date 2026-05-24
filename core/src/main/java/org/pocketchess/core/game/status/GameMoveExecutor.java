@@ -62,6 +62,12 @@ public class GameMoveExecutor {
         int kingDestCol = endSpot.getY();
 
         if (isCastling) {
+            // Record the rook's origin file BEFORE the board mutates, so the
+            // move can later be re-expressed as king-takes-rook (the only form
+            // that castles correctly for any king/rook file in Chess960).
+            move.chess960RookFromCol = CastlingUtils.findCastlingRookCol(
+                    board, startSpot.getX(), kingOrigCol,
+                    CastlingUtils.castlingDirection(kingDestCol));
             executeCastlingAtomic(startSpot.getX(), kingOrigCol, kingDestCol, sourcePiece);
         } else {
             endSpot.setPiece(sourcePiece);

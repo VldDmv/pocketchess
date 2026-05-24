@@ -81,7 +81,7 @@ public class AIPlayer {
     }
 
     private Move convertMoveToOriginalGame(Move moveFromCopy, Game originalGame) {
-        return new Move(
+        Move converted = new Move(
                 originalGame.getBoard().getBox(moveFromCopy.start.getX(), moveFromCopy.start.getY()),
                 originalGame.getBoard().getBox(moveFromCopy.end.getX(), moveFromCopy.end.getY()),
                 originalGame.getBoard().getBox(moveFromCopy.start.getX(), moveFromCopy.start.getY()).getPiece(),
@@ -91,5 +91,9 @@ public class AIPlayer {
                 originalGame.getBoard().getEnPassantTargetSquare(),
                 0, 0, 0
         );
+        // Preserve Chess960 castling metadata so the move can be replayed as
+        // king-takes-rook (which works for any king file).
+        converted.chess960RookFromCol = moveFromCopy.chess960RookFromCol;
+        return converted;
     }
 }

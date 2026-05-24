@@ -426,6 +426,37 @@ class GameServiceLifecycleTest {
     }
 
     @Test
+    void pgnImportAcceptsChess960CastlingNotation() {
+        // The reported failure: a Chess960 game where the white king starts on
+        // the b-file and castles queenside ("24. O-O-O"). The SAN matcher used
+        // to mislabel that castle "O-O" (because c-file is right of b-file),
+        // throwing "Invalid SAN move: O-O-O" on import.
+        String pgn = """
+                [Event "PocketChess Game"]
+                [Variant "Chess960"]
+                [SetUp "1"]
+                [FEN "rknbrnbq/pppppppp/8/8/8/8/PPPPPPPP/RKNBRNBQ w EAea -"]
+                [White "dada"]
+                [Black "Bot — Medium"]
+                [Result "0-1"]
+
+                1. e4 e5 2. Nb3 Ne6 3. f3 Bh4 4. g3 Bf6 5. Bc5 Nb6 6. Ne3 Na4 7. Ba3 d6
+                8. Nd5 Bg5 9. h4 Bh6 10. g4 Kc8 11. g5 Nxg5 12. hxg5 Bxg5 13. c3 Re6
+                14. Re2 h6 15. Na5 Nc5 16. Bxc5 dxc5 17. b4 b6 18. Nb3 c4 19. Nc1 h5
+                20. a4 h4 21. Bc2 h3 22. Rh2 Rh6 23. Ne2 f5 24. O-O-O Bxd5 25. exd5 Qh7
+                26. Ng1 a5 27. Rxh3 axb4 28. cxb4 c3 29. Rxh6 cxd2+ 30. Kb1 gxh6
+                31. Qh5 Qe7 32. b5 Qb4+ 33. Ka1 Rxa4+ 34. Bxa4 Qxa4+ 35. Kb2 Qb4+
+                36. Kc2 Qa4+ 37. Kd3 Qxd1 38. Qe8+ Kb7 39. Qc6+ Kbb8 40. Qe8+ Ka7
+                41. Qc6 Qdb3+ 42. Ke2 d1=Q+ 43. Kf2 Qe3+ 44. Kg3 Qexg1+ 45. Kh3 Qxf3# 0-1
+                """;
+
+        GameSession s = service.createPgnReview("viewer", pgn);
+        assertThat(s.isReview()).isTrue();
+        // The queenside castle resolves to the king-takes-rook half-move b1→a1.
+        assertThat(s.moveHistory()).contains("b1a1");
+    }
+
+    @Test
     void berserkHalvesClockAndIsRejectedAfterMove() {
         GameSession s = service.createOpen("alice", true,
                 new TimeControl(180, 0), GameModeType.CLASSIC);   // 3 min bullet

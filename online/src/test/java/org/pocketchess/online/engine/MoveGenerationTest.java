@@ -58,6 +58,44 @@ class MoveGenerationTest {
     }
 
     @Test
+    void chess960QueensideCastleFromBFileGeneratesAndExecutes() {
+        // Reproduces the reported bug: king on the b-file castling queenside
+        // (king b1 → c1, rook a1 → d1). The king travels only ONE square, so
+        // it must be expressed as king-takes-rook, never king→c-file.
+        Game g = new Game();
+        g.resetGame(new TimeControl(300, 0), GameMode.PVP, Piece.Color.WHITE,
+                AIDifficulty.MEDIUM, GameModeType.CHESS960);
+
+        Board b = g.getBoard();
+        for (int r = 0; r < 8; r++) {
+            for (int c = 0; c < 8; c++) b.getBox(r, c).setPiece(null);
+        }
+        b.getBox(7, 0).setPiece(new Rook(true));   // a1
+        b.getBox(7, 1).setPiece(new King(true));   // b1
+        b.getBox(0, 0).setPiece(new Rook(false));  // a8
+        b.getBox(0, 1).setPiece(new King(false));  // b8
+        b.saveAsInitial();
+
+        List<Move> moves = new FastMoveGenerator().generateLegalMoves(g);
+        boolean castle = moves.stream().anyMatch(m ->
+                m.wasCastlingMove
+                && m.start.getX() == 7 && m.start.getY() == 1    // from b1
+                && m.end.getX() == 7   && m.end.getY() == 2      // king's final square c1
+                && m.chess960RookFromCol == 0);                   // rook on a1
+        assertThat(castle)
+                .as("chess960 queenside castle should be generated (king b1, rook a1)")
+                .isTrue();
+
+        // Apply it the way the engine receives it — king onto its own rook.
+        boolean ok = g.playerMove(7, 1, 7, 0);
+        assertThat(ok).as("king-takes-rook castle is accepted").isTrue();
+        assertThat(b.getBox(7, 2).getPiece()).as("king lands on c1").isInstanceOf(King.class);
+        assertThat(b.getBox(7, 3).getPiece()).as("rook lands on d1").isInstanceOf(Rook.class);
+        assertThat(b.getBox(7, 0).getPiece()).as("a1 vacated").isNull();
+        assertThat(b.getBox(7, 1).getPiece()).as("b1 vacated").isNull();
+    }
+
+    @Test
     void lavaStrictGenerationIsNoStricterThanExactRules() {
         // In a fresh lava game two central squares are flagged as WARNING.
         // The AI generator avoids them; the exact-rules generator does not,

@@ -1,7 +1,6 @@
 package org.pocketchess.core.ai.search;
 
 import org.pocketchess.core.game.moveanalyze.Move;
-import org.pocketchess.core.gamemode.GameModeType;
 import org.pocketchess.core.general.Board;
 import org.pocketchess.core.general.Game;
 import org.pocketchess.core.gamemode.LavaManager;
@@ -201,45 +200,44 @@ public class FastMoveGenerator {
         if (!(piece instanceof King) || ((King) piece).hasMoved()) return;
         if (game.isKingInCheck(piece.isWhite())) return;
 
-        boolean chess960 = game.getGameModeType() == GameModeType.CHESS960;
-        addCastleMove(game, start, r, c, 6, +1, piece, chess960, moves);  // kingside  → g-file
-        addCastleMove(game, start, r, c, 2, -1, piece, chess960, moves);  // queenside → c-file
-    }
-
-    /**
-     * Generates one castling move if it's legal. The move's destination is
-     * ALWAYS the king's final square (col 6 kingside / col 2 queenside) — the
-     * engine's castling executor derives the rook move from that column, so it
-     * must not be the rook's square. The "king-takes-rook" encoding that
-     * Chess960 clients send is translated back to this form by
-     * PlayerMoveService; here we just record {@code chess960RookFromCol} so the
-     * online layer can present the move as king→rook in its UCI.
-     */
-    private void addCastleMove(Game game, Spot start, int r, int c,
-                               int kingDestCol, int searchDir,
-                               Piece king, boolean chess960, List<Move> moves) {
-        Board board = game.getBoard();
-
-        // Find the unmoved rook on this side, scanning outward from the king.
-        int rookCol = -1;
-        for (int sc = c + searchDir; sc >= 0 && sc < 8; sc += searchDir) {
-            Piece p = board.getBox(r, sc).getPiece();
-            if (p instanceof Rook && p.isWhite() == king.isWhite() && !((Rook) p).hasMoved()) {
-                rookCol = sc;
-                break;
+        // ── Kingside (O-O): destination = col 6 (g-file) ────────────────────
+        if (c != 6) {
+            Spot ksDestSpot = game.getBoard().getBox(r, 6);
+            if (game.getRuleEngine().isCastlingMoveLegal(game.getBoard(), start, ksDestSpot)
+                    && !isLava(game, r, 6)) {
+                // Find the rook so we can store its column for Chess960.
+                int ksRookCol = -1;
+                for (int sc = c + 1; sc < 8; sc++) {
+                    Piece p = game.getBoard().getBox(r, sc).getPiece();
+                    if (p instanceof Rook && p.isWhite() == piece.isWhite()
+                            && !((Rook) p).hasMoved()) { ksRookCol = sc; break; }
+                    if (p != null) break;
+                }
+                Move castleMove = new Move(start, ksDestSpot, piece, null, true, true,
+                        game.getBoard().getEnPassantTargetSquare(), 0, 0, 0);
+                castleMove.chess960RookFromCol = ksRookCol;
+                moves.add(castleMove);
             }
-            if (p != null && !(p instanceof King)) break;   // blocked by another piece
         }
-        if (rookCol == -1) return;
 
-        Spot kingDest = board.getBox(r, kingDestCol);
-        if (!game.getRuleEngine().isCastlingMoveLegal(board, start, kingDest)) return;
-        if (isLava(game, r, kingDestCol)) return;
-
-        Move castleMove = new Move(start, kingDest, king, null, true, true,
-                board.getEnPassantTargetSquare(), 0, 0, 0);
-        castleMove.chess960RookFromCol = rookCol;
-        moves.add(castleMove);
+        // ── Queenside (O-O-O): destination = col 2 (c-file) ─────────────────
+        if (c != 2) {
+            Spot qsDestSpot = game.getBoard().getBox(r, 2);
+            if (game.getRuleEngine().isCastlingMoveLegal(game.getBoard(), start, qsDestSpot)
+                    && !isLava(game, r, 2)) {
+                int qsRookCol = -1;
+                for (int sc = c - 1; sc >= 0; sc--) {
+                    Piece p = game.getBoard().getBox(r, sc).getPiece();
+                    if (p instanceof Rook && p.isWhite() == piece.isWhite()
+                            && !((Rook) p).hasMoved()) { qsRookCol = sc; break; }
+                    if (p != null) break;
+                }
+                Move castleMove = new Move(start, qsDestSpot, piece, null, true, true,
+                        game.getBoard().getEnPassantTargetSquare(), 0, 0, 0);
+                castleMove.chess960RookFromCol = qsRookCol;
+                moves.add(castleMove);
+            }
+        }
     }
 
     /** Pawn moves; cannot advance to or capture on lava squares. */
