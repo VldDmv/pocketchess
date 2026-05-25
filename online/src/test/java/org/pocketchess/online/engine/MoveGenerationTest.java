@@ -96,6 +96,95 @@ class MoveGenerationTest {
     }
 
     @Test
+    void chess960AiTurnDoesNotCorruptTheBoard() {
+        for (int i = 0; i < 120; i++) {
+            ChessEngineAdapter a = ChessEngineAdapter.newGame(
+                    new TimeControl(300, 0), AIDifficulty.MEDIUM, GameModeType.CHESS960);
+            assertFenBackRanksValid(a.fen(), "start #" + i);
+            MoveResult w = a.applyMove("e2e4");
+            assertThat(w.accepted()).as("white e2e4 #%d", i).isTrue();
+            assertFenBackRanksValid(a.fen(), "after e4 #" + i);
+            MoveResult bot = a.requestAiMove();
+            assertThat(bot.accepted()).as("bot move #%d (%s)", i, bot.error()).isTrue();
+            assertFenBackRanksValid(a.fen(), "after bot #" + i);
+        }
+    }
+
+    private static void assertFenBackRanksValid(String fen, String when) {
+        String[] ranks = fen.split(" ")[0].split("/");
+        checkBackRank(ranks[0], "black " + when);   // rank 8
+        checkBackRank(ranks[7], "white " + when);   // rank 1
+    }
+
+    private static void checkBackRank(String rank, String when) {
+        StringBuilder row = new StringBuilder();
+        for (char ch : rank.toCharArray()) {
+            if (Character.isDigit(ch)) for (int k = 0; k < ch - '0'; k++) row.append('.');
+            else row.append(ch);
+        }
+        String r = row.toString();
+        long rooks = r.chars().filter(c -> Character.toLowerCase(c) == 'r').count();
+        int king = Math.max(r.indexOf('k'), r.indexOf('K'));
+        int firstR = Math.max(r.toLowerCase().indexOf('r'), -1);
+        int lastR = r.toLowerCase().lastIndexOf('r');
+        // Only meaningful while the king/rooks haven't legitimately moved; at the
+        // very start they must form a valid arrangement.
+        assertThat(rooks).as("two rooks on %s rank (%s)", when, r).isGreaterThanOrEqualTo(2);
+        if (king >= 0 && firstR >= 0) {
+            assertThat(king).as("king between rooks on %s rank (%s)", when, r)
+                    .isGreaterThan(firstR).isLessThan(lastR);
+        }
+    }
+
+    @Test
+    void chess960AllSpNumbersPlaceKingBetweenTwoRooks() {
+        for (int sp = 0; sp < 960; sp++) {
+            org.pocketchess.core.pieces.Piece[] rank =
+                    org.pocketchess.core.gamemode.Chess960Setup.generatePosition(sp, true);
+            int rooks = 0, king = -1, firstR = -1, lastR = -1;
+            StringBuilder render = new StringBuilder();
+            for (int i = 0; i < 8; i++) {
+                if (rank[i] instanceof Rook) { rooks++; if (firstR < 0) firstR = i; lastR = i; }
+                if (rank[i] instanceof King) king = i;
+                render.append(rank[i] == null ? "." : rank[i].getClass().getSimpleName().charAt(0));
+            }
+            assertThat(rooks).as("sp %d should have 2 rooks (%s)", sp, render).isEqualTo(2);
+            assertThat(king).as("sp %d king between rooks (%s)", sp, render)
+                    .isGreaterThan(firstR).isLessThan(lastR);
+        }
+    }
+
+    @Test
+    void chess960BoardSetupKeepsKingBetweenRooksAfterPawnMove() {
+        for (int i = 0; i < 2000; i++) {
+            Game g = new Game();
+            g.resetGame(new TimeControl(300, 0), GameMode.PVP, Piece.Color.WHITE,
+                    AIDifficulty.HARD, GameModeType.CHESS960);
+            assertRow7Valid(g, "after reset");
+            // A plain pawn move must not disturb the back rank.
+            // Find a legal pawn double-step that exists in every 960 start: e2e4.
+            if (g.playerMove(6, 4, 4, 4)) {
+                assertRow7Valid(g, "after e2e4");
+            }
+        }
+    }
+
+    private static void assertRow7Valid(Game g, String when) {
+        Board b = g.getBoard();
+        int rooks = 0, king = -1, firstR = -1, lastR = -1;
+        StringBuilder render = new StringBuilder();
+        for (int c = 0; c < 8; c++) {
+            Piece p = b.getBox(7, c).getPiece();
+            if (p instanceof Rook) { rooks++; if (firstR < 0) firstR = c; lastR = c; }
+            if (p instanceof King) king = c;
+            render.append(p == null ? "." : p.getClass().getSimpleName().charAt(0));
+        }
+        assertThat(rooks).as("white rooks %s (%s)", when, render).isEqualTo(2);
+        assertThat(king).as("white king between rooks %s (%s)", when, render)
+                .isGreaterThan(firstR).isLessThan(lastR);
+    }
+
+    @Test
     void chess960StartAlwaysHasBothRooksWithKingBetween() {
         for (int i = 0; i < 400; i++) {
             ChessEngineAdapter a = ChessEngineAdapter.newGame(
@@ -137,6 +226,30 @@ class MoveGenerationTest {
         assertThat(ok).as("king-takes-rook castle is accepted").isTrue();
         assertThat(b.getBox(7, 6).getPiece()).as("king lands on g1").isInstanceOf(King.class);
         assertThat(b.getBox(7, 5).getPiece()).as("rook lands on f1 (must not vanish)").isInstanceOf(Rook.class);
+    }
+
+    @Test
+    void chess960QueensideCastleWhereKingAndRookSwap() {
+        // King d1, rook c1 — queenside castle ends with king c1, rook d1 (they
+        // swap). This is the exact shape of the reported "rook vanished" FEN.
+        Game g = new Game();
+        g.resetGame(new TimeControl(300, 0), GameMode.PVP, Piece.Color.WHITE,
+                AIDifficulty.MEDIUM, GameModeType.CHESS960);
+
+        Board b = g.getBoard();
+        for (int r = 0; r < 8; r++) {
+            for (int c = 0; c < 8; c++) b.getBox(r, c).setPiece(null);
+        }
+        b.getBox(7, 3).setPiece(new King(true));   // d1
+        b.getBox(7, 2).setPiece(new Rook(true));   // c1
+        b.getBox(0, 4).setPiece(new King(false));  // e8
+        b.getBox(0, 7).setPiece(new Rook(false));  // h8
+        b.saveAsInitial();
+
+        boolean ok = g.playerMove(7, 3, 7, 2);     // king takes rook (c1)
+        assertThat(ok).as("queenside king-takes-rook castle is accepted").isTrue();
+        assertThat(b.getBox(7, 2).getPiece()).as("king lands on c1").isInstanceOf(King.class);
+        assertThat(b.getBox(7, 3).getPiece()).as("rook lands on d1 (must not vanish)").isInstanceOf(Rook.class);
     }
 
     @Test
