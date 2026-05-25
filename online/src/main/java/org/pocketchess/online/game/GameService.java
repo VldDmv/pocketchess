@@ -105,6 +105,23 @@ public class GameService {
         return registry.find(gameId);
     }
 
+    /**
+     * Runs {@code action} holding the target game's own monitor. Every mutation
+     * of one game serialises on its session — the same lock the AI worker and
+     * the clock/abort/forfeit timers use — so a human action can never race a
+     * bot move or a flag-fall on the same board. Different games stay
+     * independent (no global lock), so a slow AI search only blocks its own game.
+     * None of the callbacks invoked here (broadcast, lobby push, persistence,
+     * rematch creation) acquire another session's lock, so there is no nesting
+     * and therefore no deadlock.
+     */
+    private void withGame(String gameId, java.util.function.Consumer<GameSession> action) {
+        GameSession s = registry.find(gameId).orElseThrow();
+        synchronized (s) {
+            action.accept(s);
+        }
+    }
+
     /** Open challenge created by {@code displayName} that is still waiting for an opponent. */
     public java.util.Optional<GameSession> findOpenChallengeBy(String displayName) {
         return registry.all().stream()
@@ -115,7 +132,7 @@ public class GameService {
     }
 
     /** Removes any open (un-joined) challenges authored by {@code displayName}. */
-    public synchronized void cancelOpenChallengesBy(String displayName) {
+    public void cancelOpenChallengesBy(String displayName) {
         boolean removed = false;
         for (GameSession s : registry.all()) {
             if (!s.isOpenSeat()) continue;
@@ -208,26 +225,28 @@ public class GameService {
     }
 
     /** Joins an open game with the second player. */
-    public synchronized GameSession join(GameSession session, String joinerName) {
-        if (!session.isOpenSeat()) throw new IllegalStateException("Game is no longer open");
-        if (session.white() != null && session.white().name().equals(joinerName)) {
-            throw new IllegalStateException("You created this game");
+    public GameSession join(GameSession session, String joinerName) {
+        synchronized (session) {
+            if (!session.isOpenSeat()) throw new IllegalStateException("Game is no longer open");
+            if (session.white() != null && session.white().name().equals(joinerName)) {
+                throw new IllegalStateException("You created this game");
+            }
+            if (session.black() != null && session.black().name().equals(joinerName)) {
+                throw new IllegalStateException("You created this game");
+            }
+            // Accepting a challenge implies the joiner is no longer waiting on
+            // any open challenge of their own — drop those so the lobby stays clean.
+            cancelOpenChallengesBy(joinerName);
+            session.seatOpponent(Player.human(joinerName));
+            stampRatings(session);
+            rearmAbortTimer(session);
+            broadcast(session, null, "start");
+            pushMyGamesFor(session);
+            // Push redirect to both seats — the creator may still be sitting in
+            // the lobby (they don't get the /topic/game/{id} broadcast there).
+            notifyRedirect(session.white(), session.id());
+            notifyRedirect(session.black(), session.id());
         }
-        if (session.black() != null && session.black().name().equals(joinerName)) {
-            throw new IllegalStateException("You created this game");
-        }
-        // Accepting a challenge implies the joiner is no longer waiting on
-        // any open challenge of their own — drop those so the lobby stays clean.
-        cancelOpenChallengesBy(joinerName);
-        session.seatOpponent(Player.human(joinerName));
-        stampRatings(session);
-        rearmAbortTimer(session);
-        broadcast(session, null, "start");
-        pushMyGamesFor(session);
-        // Push redirect to both seats — the creator may still be sitting in
-        // the lobby (they don't get the /topic/game/{id} broadcast there).
-        notifyRedirect(session.white(), session.id());
-        notifyRedirect(session.black(), session.id());
         return session;
     }
 
@@ -235,20 +254,21 @@ public class GameService {
     //  Moves
     // ─────────────────────────────────────────────────────────────────────
 
-    public synchronized void applyMove(String gameId, String byName, String uci) {
-        GameSession s = registry.find(gameId).orElseThrow();
-        if (s.stage() != GameSession.LifecycleStage.ACTIVE) {
-            sendError(gameId, byName, "Game is not active.");
-            return;
-        }
-        if (!isPlayerToMove(s, byName)) {
-            sendError(gameId, byName, "Not your turn.");
-            return;
-        }
-        executeMoveAndBroadcast(s, uci, byName);
-        if (s.stage() == GameSession.LifecycleStage.ACTIVE && s.sideToMove().bot()) {
-            scheduleAiMove(s);
-        }
+    public void applyMove(String gameId, String byName, String uci) {
+        withGame(gameId, s -> {
+            if (s.stage() != GameSession.LifecycleStage.ACTIVE) {
+                sendError(gameId, byName, "Game is not active.");
+                return;
+            }
+            if (!isPlayerToMove(s, byName)) {
+                sendError(gameId, byName, "Not your turn.");
+                return;
+            }
+            executeMoveAndBroadcast(s, uci, byName);
+            if (s.stage() == GameSession.LifecycleStage.ACTIVE && s.sideToMove().bot()) {
+                scheduleAiMove(s);
+            }
+        });
     }
 
     private void executeMoveAndBroadcast(GameSession s, String uci, String byName) {
@@ -326,31 +346,32 @@ public class GameService {
      * +1 Elo bonus on win. Only allowed for short time controls
      * (≤ 10 min estimated) and only before the berserker's first move.
      */
-    public synchronized void requestBerserk(String gameId, String byName) {
-        GameSession s = registry.find(gameId).orElseThrow();
-        if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
-        if (s.playerByName(byName) == null) return;
-        if (s.timeControl().isUnlimited()) {
-            sendError(gameId, byName, "Berserk needs a time control.");
-            return;
-        }
-        long estimated = s.timeControl().baseTimeSeconds()
-                + 40L * Math.max(0, s.timeControl().incrementSeconds());
-        if (estimated >= 600) {
-            sendError(gameId, byName, "Berserk only available for games under 10 min.");
-            return;
-        }
-        boolean isWhite = s.white() != null && byName.equals(s.white().name());
-        // Allowed only before this side's first move.
-        int myPlies = isWhite ? whitePliesPlayed(s) : blackPliesPlayed(s);
-        if (myPlies > 0) {
-            sendError(gameId, byName, "Too late to berserk — you've already moved.");
-            return;
-        }
-        if (isWhite ? s.whiteBerserked() : s.blackBerserked()) return;
-        s.berserkSide(isWhite);
-        broadcast(s, null, null);
-        log.info("Game {} — {} berserked", gameId, byName);
+    public void requestBerserk(String gameId, String byName) {
+        withGame(gameId, s -> {
+            if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
+            if (s.playerByName(byName) == null) return;
+            if (s.timeControl().isUnlimited()) {
+                sendError(gameId, byName, "Berserk needs a time control.");
+                return;
+            }
+            long estimated = s.timeControl().baseTimeSeconds()
+                    + 40L * Math.max(0, s.timeControl().incrementSeconds());
+            if (estimated >= 600) {
+                sendError(gameId, byName, "Berserk only available for games under 10 min.");
+                return;
+            }
+            boolean isWhite = s.white() != null && byName.equals(s.white().name());
+            // Allowed only before this side's first move.
+            int myPlies = isWhite ? whitePliesPlayed(s) : blackPliesPlayed(s);
+            if (myPlies > 0) {
+                sendError(gameId, byName, "Too late to berserk — you've already moved.");
+                return;
+            }
+            if (isWhite ? s.whiteBerserked() : s.blackBerserked()) return;
+            s.berserkSide(isWhite);
+            broadcast(s, null, null);
+            log.info("Game {} — {} berserked", gameId, byName);
+        });
     }
 
     private static int whitePliesPlayed(GameSession s) {
@@ -369,70 +390,74 @@ public class GameService {
      * two plies have been played. After move 2 the game is "in progress"
      * and the only ways out are resign / draw / clock. Mirrors lichess.
      */
-    public synchronized void requestAbort(String gameId, String byName) {
-        GameSession s = registry.find(gameId).orElseThrow();
-        if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
-        if (s.playerByName(byName) == null) return;
-        if (s.moveHistory().size() >= 2) {
-            sendError(gameId, byName, "Cannot abort after both sides have moved.");
-            return;
-        }
-        s.markAborted();
-        cancelFlagFall(gameId);
-        cancelAbortTimer(gameId);
-        broadcast(s, null, null);
-        pushMyGamesFor(s);
-        log.info("Game {} aborted by {}", gameId, byName);
+    public void requestAbort(String gameId, String byName) {
+        withGame(gameId, s -> {
+            if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
+            if (s.playerByName(byName) == null) return;
+            if (s.moveHistory().size() >= 2) {
+                sendError(gameId, byName, "Cannot abort after both sides have moved.");
+                return;
+            }
+            s.markAborted();
+            cancelFlagFall(gameId);
+            cancelAbortTimer(gameId);
+            broadcast(s, null, null);
+            pushMyGamesFor(s);
+            log.info("Game {} aborted by {}", gameId, byName);
+        });
     }
 
-    public synchronized void resign(String gameId, String byName) {
-        GameSession s = registry.find(gameId).orElseThrow();
-        if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
-        if (s.playerByName(byName) == null) {
-            sendError(gameId, byName, "You're not in this game.");
-            return;
-        }
-        boolean resignerIsWhite = s.white() != null && byName.equals(s.white().name());
-        s.engine().resignBy(resignerIsWhite);
-        s.markFinished();
-        cancelFlagFall(gameId);
-        cancelAbortTimer(gameId);
-        persistIfRated(s); pushMyGamesFor(s);
-        broadcast(s, null, "checkmate");
-    }
-
-    public synchronized void offerDraw(String gameId, String byName) {
-        GameSession s = registry.find(gameId).orElseThrow();
-        if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
-        if (s.playerByName(byName) == null) return;
-        if (byName.equals(s.drawOfferBy())) return;
-
-        if (s.drawOfferBy() != null) {
-            // The other side already offered — accepting now finalises the draw.
-            s.engine().acceptDraw();
+    public void resign(String gameId, String byName) {
+        withGame(gameId, s -> {
+            if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
+            if (s.playerByName(byName) == null) {
+                sendError(gameId, byName, "You're not in this game.");
+                return;
+            }
+            boolean resignerIsWhite = s.white() != null && byName.equals(s.white().name());
+            s.engine().resignBy(resignerIsWhite);
             s.markFinished();
             cancelFlagFall(gameId);
             cancelAbortTimer(gameId);
-            s.clearDrawOffer();
             persistIfRated(s); pushMyGamesFor(s);
-            broadcast(s, null, "draw");
-        } else {
-            s.setDrawOfferBy(byName);
-            // Auto-decline from bots — they fight on.
-            if (s.otherSide() != null && s.otherSide().bot()) {
-                s.clearDrawOffer();
-            }
-            broadcast(s, null, null);
-        }
+            broadcast(s, null, "checkmate");
+        });
     }
 
-    public synchronized void declineDraw(String gameId, String byName) {
-        GameSession s = registry.find(gameId).orElseThrow();
-        if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
-        if (s.drawOfferBy() == null) return;
-        if (byName.equals(s.drawOfferBy())) return;
-        s.clearDrawOffer();
-        broadcast(s, null, null);
+    public void offerDraw(String gameId, String byName) {
+        withGame(gameId, s -> {
+            if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
+            if (s.playerByName(byName) == null) return;
+            if (byName.equals(s.drawOfferBy())) return;
+
+            if (s.drawOfferBy() != null) {
+                // The other side already offered — accepting now finalises the draw.
+                s.engine().acceptDraw();
+                s.markFinished();
+                cancelFlagFall(gameId);
+                cancelAbortTimer(gameId);
+                s.clearDrawOffer();
+                persistIfRated(s); pushMyGamesFor(s);
+                broadcast(s, null, "draw");
+            } else {
+                s.setDrawOfferBy(byName);
+                // Auto-decline from bots — they fight on.
+                if (s.otherSide() != null && s.otherSide().bot()) {
+                    s.clearDrawOffer();
+                }
+                broadcast(s, null, null);
+            }
+        });
+    }
+
+    public void declineDraw(String gameId, String byName) {
+        withGame(gameId, s -> {
+            if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
+            if (s.drawOfferBy() == null) return;
+            if (byName.equals(s.drawOfferBy())) return;
+            s.clearDrawOffer();
+            broadcast(s, null, null);
+        });
     }
 
     /**
@@ -442,31 +467,33 @@ public class GameService {
      * forwarded to the opponent and only one half-move (the most recent)
      * is reverted on accept.
      */
-    public synchronized void requestUndo(String gameId, String byName) {
-        GameSession s = registry.find(gameId).orElseThrow();
-        if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
-        if (s.playerByName(byName) == null) return;
-        if (s.moveHistory().isEmpty()) return;
+    public void requestUndo(String gameId, String byName) {
+        withGame(gameId, s -> {
+            if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
+            if (s.playerByName(byName) == null) return;
+            if (s.moveHistory().isEmpty()) return;
 
-        if (opponentIsBot(s, byName)) {
-            performUndo(s, 2);
-            return;
-        }
-        if (byName.equals(s.undoRequestBy())) return;
-        s.setUndoRequestBy(byName);
-        broadcast(s, null, null);
+            if (opponentIsBot(s, byName)) {
+                performUndo(s, 2);
+                return;
+            }
+            if (byName.equals(s.undoRequestBy())) return;
+            s.setUndoRequestBy(byName);
+            broadcast(s, null, null);
+        });
     }
 
-    public synchronized void acceptUndo(String gameId, String byName) {
-        GameSession s = registry.find(gameId).orElseThrow();
-        if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
-        if (s.undoRequestBy() == null) return;
-        if (byName.equals(s.undoRequestBy())) return;
-        String requester = s.undoRequestBy();
-        s.clearUndoRequest();
-        // Revert far enough that the requester's own last move is undone — so
-        // in PvP they get to re-think their move, not just erase the reply.
-        performUndo(s, pliesBackToRequestersMove(s, requester));
+    public void acceptUndo(String gameId, String byName) {
+        withGame(gameId, s -> {
+            if (s.stage() != GameSession.LifecycleStage.ACTIVE) return;
+            if (s.undoRequestBy() == null) return;
+            if (byName.equals(s.undoRequestBy())) return;
+            String requester = s.undoRequestBy();
+            s.clearUndoRequest();
+            // Revert far enough that the requester's own last move is undone — so
+            // in PvP they get to re-think their move, not just erase the reply.
+            performUndo(s, pliesBackToRequestersMove(s, requester));
+        });
     }
 
     /**
@@ -485,12 +512,13 @@ public class GameService {
         return lastOwn < 0 ? 1 : size - lastOwn;
     }
 
-    public synchronized void declineUndo(String gameId, String byName) {
-        GameSession s = registry.find(gameId).orElseThrow();
-        if (s.undoRequestBy() == null) return;
-        if (byName.equals(s.undoRequestBy())) return;
-        s.clearUndoRequest();
-        broadcast(s, null, null);
+    public void declineUndo(String gameId, String byName) {
+        withGame(gameId, s -> {
+            if (s.undoRequestBy() == null) return;
+            if (byName.equals(s.undoRequestBy())) return;
+            s.clearUndoRequest();
+            broadcast(s, null, null);
+        });
     }
 
     /** Reverts exactly {@code plies} half-moves (or as many as are present). */
@@ -522,34 +550,36 @@ public class GameService {
     //  current game has ended. PvE rematches finalise immediately.
     // ─────────────────────────────────────────────────────────────────────
 
-    public synchronized void offerRematch(String gameId, String byName) {
-        GameSession s = registry.find(gameId).orElseThrow();
-        if (s.stage() != GameSession.LifecycleStage.FINISHED
-                && s.stage() != GameSession.LifecycleStage.ABORTED) return;
-        if (s.playerByName(byName) == null) return;
-        if (s.rematchToGameId() != null) return;     // already finalised
+    public void offerRematch(String gameId, String byName) {
+        withGame(gameId, s -> {
+            if (s.stage() != GameSession.LifecycleStage.FINISHED
+                    && s.stage() != GameSession.LifecycleStage.ABORTED) return;
+            if (s.playerByName(byName) == null) return;
+            if (s.rematchToGameId() != null) return;     // already finalised
 
-        if (opponentIsBot(s, byName)) {
-            finaliseRematch(s, byName);
-            return;
-        }
-        if (s.rematchOfferBy() != null && !s.rematchOfferBy().equals(byName)) {
-            // Other side already offered — clicking now accepts.
-            finaliseRematch(s, byName);
-            return;
-        }
-        s.setRematchOfferBy(byName);
-        broadcast(s, null, null);
+            if (opponentIsBot(s, byName)) {
+                finaliseRematch(s, byName);
+                return;
+            }
+            if (s.rematchOfferBy() != null && !s.rematchOfferBy().equals(byName)) {
+                // Other side already offered — clicking now accepts.
+                finaliseRematch(s, byName);
+                return;
+            }
+            s.setRematchOfferBy(byName);
+            broadcast(s, null, null);
+        });
     }
 
-    public synchronized void declineRematch(String gameId, String byName) {
-        GameSession s = registry.find(gameId).orElseThrow();
-        if (s.rematchOfferBy() == null) return;
-        if (s.playerByName(byName) == null) return;     // not in this game
-        // Either side may clear the offer — the opponent declines it, the
-        // offerer cancels it. (Previously this returned for the offerer.)
-        s.clearRematchOffer();
-        broadcast(s, null, null);
+    public void declineRematch(String gameId, String byName) {
+        withGame(gameId, s -> {
+            if (s.rematchOfferBy() == null) return;
+            if (s.playerByName(byName) == null) return;     // not in this game
+            // Either side may clear the offer — the opponent declines it, the
+            // offerer cancels it. (Previously this returned for the offerer.)
+            s.clearRematchOffer();
+            broadcast(s, null, null);
+        });
     }
 
     private void finaliseRematch(GameSession finished, String acceptedBy) {
@@ -600,42 +630,46 @@ public class GameService {
     //  haven't reconnected by then, the game is forfeited on their side.
     // ─────────────────────────────────────────────────────────────────────
 
-    public synchronized void onPlayerDisconnected(String username) {
+    public void onPlayerDisconnected(String username) {
         long now = System.currentTimeMillis();
         for (GameSession s : registry.all()) {
-            if (s.stage() != GameSession.LifecycleStage.ACTIVE) continue;
-            boolean isWhite = s.white() != null && username.equals(s.white().name());
-            boolean isBlack = s.black() != null && username.equals(s.black().name());
-            if (!isWhite && !isBlack) continue;
+            synchronized (s) {
+                if (s.stage() != GameSession.LifecycleStage.ACTIVE) continue;
+                boolean isWhite = s.white() != null && username.equals(s.white().name());
+                boolean isBlack = s.black() != null && username.equals(s.black().name());
+                if (!isWhite && !isBlack) continue;
 
-            if (isWhite) s.setWhiteDisconnectedAt(now);
-            else         s.setBlackDisconnectedAt(now);
+                if (isWhite) s.setWhiteDisconnectedAt(now);
+                else         s.setBlackDisconnectedAt(now);
 
-            String key = s.id() + ":" + username;
-            cancelExistingForfeit(key);
-            ScheduledFuture<?> fut = scheduler.schedule(
-                    () -> forfeitOnDisconnect(s.id(), username),
-                    DISCONNECT_FORFEIT_MILLIS, TimeUnit.MILLISECONDS);
-            disconnectForfeits.put(key, fut);
-            broadcast(s, null, null);
-            log.info("Player {} went offline in game {}", username, s.id());
+                String key = s.id() + ":" + username;
+                cancelExistingForfeit(key);
+                ScheduledFuture<?> fut = scheduler.schedule(
+                        () -> forfeitOnDisconnect(s.id(), username),
+                        DISCONNECT_FORFEIT_MILLIS, TimeUnit.MILLISECONDS);
+                disconnectForfeits.put(key, fut);
+                broadcast(s, null, null);
+                log.info("Player {} went offline in game {}", username, s.id());
+            }
         }
     }
 
-    public synchronized void onPlayerReconnected(String username) {
+    public void onPlayerReconnected(String username) {
         for (GameSession s : registry.all()) {
-            boolean isWhite = s.white() != null && username.equals(s.white().name());
-            boolean isBlack = s.black() != null && username.equals(s.black().name());
-            if (!isWhite && !isBlack) continue;
-            boolean wasOffline = (isWhite && s.whiteDisconnectedAt() > 0)
-                              || (isBlack && s.blackDisconnectedAt() > 0);
-            if (!wasOffline) continue;
+            synchronized (s) {
+                boolean isWhite = s.white() != null && username.equals(s.white().name());
+                boolean isBlack = s.black() != null && username.equals(s.black().name());
+                if (!isWhite && !isBlack) continue;
+                boolean wasOffline = (isWhite && s.whiteDisconnectedAt() > 0)
+                                  || (isBlack && s.blackDisconnectedAt() > 0);
+                if (!wasOffline) continue;
 
-            if (isWhite) s.setWhiteDisconnectedAt(0);
-            else         s.setBlackDisconnectedAt(0);
-            cancelExistingForfeit(s.id() + ":" + username);
-            broadcast(s, null, null);
-            log.info("Player {} reconnected to game {}", username, s.id());
+                if (isWhite) s.setWhiteDisconnectedAt(0);
+                else         s.setBlackDisconnectedAt(0);
+                cancelExistingForfeit(s.id() + ":" + username);
+                broadcast(s, null, null);
+                log.info("Player {} reconnected to game {}", username, s.id());
+            }
         }
     }
 
@@ -667,16 +701,17 @@ public class GameService {
         }
     }
 
-    public synchronized void postChat(String gameId, String byName, String text) {
-        GameSession s = registry.find(gameId).orElseThrow();
-        if (s.playerByName(byName) == null) return;
-        String trimmed = text == null ? "" : text.strip();
-        if (trimmed.isEmpty()) return;
-        if (trimmed.length() > 500) trimmed = trimmed.substring(0, 500);
-        long ts = System.currentTimeMillis();
-        s.chat().add(new GameSession.ChatLine(byName, trimmed, ts));
-        messaging.convertAndSend("/topic/game/" + gameId + "/chat",
-                new Messages.ChatNotice(byName, trimmed, ts));
+    public void postChat(String gameId, String byName, String text) {
+        withGame(gameId, s -> {
+            if (s.playerByName(byName) == null) return;
+            String trimmed = text == null ? "" : text.strip();
+            if (trimmed.isEmpty()) return;
+            if (trimmed.length() > 500) trimmed = trimmed.substring(0, 500);
+            long ts = System.currentTimeMillis();
+            s.chat().add(new GameSession.ChatLine(byName, trimmed, ts));
+            messaging.convertAndSend("/topic/game/" + gameId + "/chat",
+                    new Messages.ChatNotice(byName, trimmed, ts));
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────
