@@ -56,10 +56,20 @@ public class TemporaryMoveHandler {
         Spot startSpot = move.start;
         Spot endSpot   = move.end;
 
+        // Castling needs an atomic restore: the king's origin and the rook's
+        // castled square can be the SAME square (Chess960 king f1 / rook g1 —
+        // the rook lands on the king's origin). A generic startSpot=king /
+        // endSpot=killed restore clobbers the rook there, so rebuild all four
+        // castling squares together instead.
+        if (move.wasCastlingMove) {
+            undoCastlingAtomic(move);
+            if (move.wasFirstMoveForPiece) restorePieceState(move.pieceMoved);
+            board.setEnPassantTargetSquare(move.enPassantTargetBeforeMove);
+            return isWhiteTurn;
+        }
+
         startSpot.setPiece(move.pieceMoved);
         endSpot.setPiece(move.pieceKilled);
-
-        if (move.wasCastlingMove) undoCastlingRook(startSpot, endSpot, move);
 
         if (move.pieceMoved instanceof Pawn && endSpot == move.enPassantTargetBeforeMove) {
             endSpot.setPiece(null);
@@ -113,27 +123,31 @@ public class TemporaryMoveHandler {
     }
 
     /**
-     * Restores king and rook to pre-castle positions.
-     * undoTemporaryMove already restores the king via startSpot/endSpot,
-     * so here we only restore the rook — including its {@code hasMoved}
-     * flag, which {@link #executeCastlingAtomic} flipped to {@code true}.
-     * Castling is only legal when the rook hasn't moved, so resetting the
-     * flag unconditionally on undo is correct.
+     * Fully reverses a castle, restoring the king to its origin and the rook
+     * to its origin. Captures both pieces first, then clears the king/rook
+     * destination squares, then places the originals — so it is correct even
+     * when squares overlap (king origin == rook destination, or king
+     * destination == rook origin), as happens with adjacent Chess960 setups.
      */
-    private void undoCastlingRook(Spot startSpot, Spot endSpot, Move move) {
-        int kingDestCol = endSpot.getY();
+    private void undoCastlingAtomic(Move move) {
+        int row         = move.start.getX();
+        int kingOrigCol = move.start.getY();
+        int kingDestCol = move.end.getY();
         int rookNewY    = CastlingUtils.rookDestCol(kingDestCol);
-
-        int rookFromY = move.chess960RookFromCol != -1
+        int rookFromY   = move.chess960RookFromCol != -1
                 ? move.chess960RookFromCol
                 : (kingDestCol == 6 ? 7 : 0);  // standard fallback
 
-        Spot rookOrigSpot = board.getBox(startSpot.getX(), rookFromY);
-        Spot rookCurSpot  = board.getBox(startSpot.getX(), rookNewY);
+        Piece king = move.pieceMoved;
+        Piece rook = board.getBox(row, rookNewY).getPiece();   // rook sits on its castled square
 
-        Piece rook = rookCurSpot.getPiece();
-        rookOrigSpot.setPiece(rook);
-        if (rookFromY != rookNewY) rookCurSpot.setPiece(null);
+        // Clear the post-castle squares, then restore the pre-castle positions.
+        board.getBox(row, kingDestCol).setPiece(null);
+        board.getBox(row, rookNewY).setPiece(null);
+        board.getBox(row, kingOrigCol).setPiece(king);
+        board.getBox(row, rookFromY).setPiece(rook);
+
+        if (king instanceof King) ((King) king).setHasMoved(false);
         if (rook instanceof Rook) ((Rook) rook).setHasMoved(false);
     }
 

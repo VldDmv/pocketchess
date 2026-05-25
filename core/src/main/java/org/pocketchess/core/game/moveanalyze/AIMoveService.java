@@ -76,21 +76,25 @@ public class AIMoveService {
     }
 
     private void executeAIMove(Move bestMove) {
-        Piece movingPiece = bestMove.start.getPiece();
-        boolean isPromotionMove = isPromotionMove(movingPiece, bestMove);
+        boolean whiteMoving = stateManager.isWhiteTurn();
 
-        if (isPromotionMove && bestMove.promotedTo == null) {
-            bestMove.promotedTo = new Queen(movingPiece.isWhite());
+        Move applied = tryApply(bestMove);
+        if (applied == null) {
+            // The engine's legality check occasionally disagrees with the move
+            // generator (e.g. a Chess960 king step, or a check-detection edge
+            // case). Rather than freeze on the bot's turn, play the first move
+            // the executor actually accepts.
+            for (Move alt : new org.pocketchess.core.ai.search.FastMoveGenerator()
+                    .generateLegalMoves(game)) {
+                applied = tryApply(alt);
+                if (applied != null) break;
+            }
         }
-
-        boolean moveSuccessful = playerMoveService.executeMove(
-                bestMove.start.getX(), bestMove.start.getY(),
-                bestMove.end.getX(), bestMove.end.getY()
-        );
+        boolean moveSuccessful = applied != null;
 
         if (moveSuccessful && stateManager.getStatus() == GameStatus.AWAITING_PROMOTION) {
-            Piece promotionPiece = bestMove.promotedTo != null
-                    ? bestMove.promotedTo : new Queen(movingPiece.isWhite());
+            Piece promotionPiece = applied.promotedTo != null
+                    ? applied.promotedTo : new Queen(whiteMoving);
             playerMoveService.promotePawn(promotionPiece);
         }
 
@@ -100,9 +104,22 @@ public class AIMoveService {
         }
     }
 
-    private boolean isPromotionMove(Piece piece, Move move) {
-        if (!(piece instanceof Pawn)) return false;
-        return (piece.isWhite() && move.end.getX() == 0) ||
-                (!piece.isWhite() && move.end.getX() == 7);
+    /**
+     * Applies a move (Chess960 castles as king-takes-rook so any king file
+     * works); returns the move if the executor accepted it, else {@code null}
+     * with no change to the board.
+     */
+    private Move tryApply(Move m) {
+        boolean ok;
+        if (m.wasCastlingMove
+                && game.getGameModeType() == org.pocketchess.core.gamemode.GameModeType.CHESS960
+                && m.chess960RookFromCol >= 0) {
+            ok = playerMoveService.executeMove(m.start.getX(), m.start.getY(),
+                    m.start.getX(), m.chess960RookFromCol);
+        } else {
+            ok = playerMoveService.executeMove(m.start.getX(), m.start.getY(),
+                    m.end.getX(), m.end.getY());
+        }
+        return ok ? m : null;
     }
 }

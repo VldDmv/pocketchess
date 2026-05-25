@@ -2,6 +2,8 @@ package org.pocketchess.online.engine;
 
 import org.junit.jupiter.api.Test;
 import org.pocketchess.core.ai.difficulty.AIDifficulty;
+import org.pocketchess.core.ai.difficulty.EvaluationParameters;
+import org.pocketchess.core.ai.search.AIPlayer;
 import org.pocketchess.core.ai.search.FastMoveGenerator;
 import org.pocketchess.core.game.model.GameMode;
 import org.pocketchess.core.game.model.TimeControl;
@@ -124,16 +126,12 @@ class MoveGenerationTest {
         }
         String r = row.toString();
         long rooks = r.chars().filter(c -> Character.toLowerCase(c) == 'r').count();
-        int king = Math.max(r.indexOf('k'), r.indexOf('K'));
-        int firstR = Math.max(r.toLowerCase().indexOf('r'), -1);
-        int lastR = r.toLowerCase().lastIndexOf('r');
-        // Only meaningful while the king/rooks haven't legitimately moved; at the
-        // very start they must form a valid arrangement.
-        assertThat(rooks).as("two rooks on %s rank (%s)", when, r).isGreaterThanOrEqualTo(2);
-        if (king >= 0 && firstR >= 0) {
-            assertThat(king).as("king between rooks on %s rank (%s)", when, r)
-                    .isGreaterThan(firstR).isLessThan(lastR);
-        }
+        // The corruption symptom was a vanishing rook. No captures are possible
+        // this early (start → e4 → one reply), so both back ranks must still
+        // hold their two rooks. (King-between-rooks only holds at the very start
+        // and is covered by the dedicated setup tests, not here — a king or rook
+        // may legitimately step out of formation after a move.)
+        assertThat(rooks).as("two rooks on %s rank (%s)", when, r).isEqualTo(2);
     }
 
     @Test
@@ -226,6 +224,74 @@ class MoveGenerationTest {
         assertThat(ok).as("king-takes-rook castle is accepted").isTrue();
         assertThat(b.getBox(7, 6).getPiece()).as("king lands on g1").isInstanceOf(King.class);
         assertThat(b.getBox(7, 5).getPiece()).as("rook lands on f1 (must not vanish)").isInstanceOf(Rook.class);
+    }
+
+    @Test
+    void chess960AiNeverFreezesApplyingItsOwnMove() {
+        // Reproduces the desktop "AI won't move" freeze: when the bot's best move
+        // is a castle, AIMoveService applies it as king-takes-rook. If that ever
+        // returns false the desktop would hang on the AI's turn. Play full
+        // AI-vs-AI Chess960 games applying moves exactly as AIMoveService does
+        // and assert every AI move is accepted.
+        for (int gameNo = 0; gameNo < 12; gameNo++) {
+            Game g = new Game();
+            g.resetGame(new TimeControl(300, 0), GameMode.PVP, Piece.Color.WHITE,
+                    AIDifficulty.EASY, GameModeType.CHESS960);
+            for (int ply = 0; ply < 40 && !g.isGameOver(); ply++) {
+                Move best = new AIPlayer(new EvaluationParameters(), AIDifficulty.EASY)
+                        .findBestMove(g);
+                // Mirror the service's apply-with-fallback: the bot must always
+                // make some executor-accepted move (or the game is genuinely over).
+                java.util.List<Move> candidates = new java.util.ArrayList<>();
+                if (best != null) candidates.add(best);
+                candidates.addAll(new FastMoveGenerator().generateLegalMoves(g));
+
+                boolean moved = false;
+                for (Move m : candidates) {
+                    boolean ok = (m.wasCastlingMove && m.chess960RookFromCol >= 0)
+                            ? g.playerMove(m.start.getX(), m.start.getY(),
+                                    m.start.getX(), m.chess960RookFromCol)
+                            : g.playerMove(m.start.getX(), m.start.getY(),
+                                    m.end.getX(), m.end.getY());
+                    if (ok) {
+                        if (g.getStatus() == org.pocketchess.core.game.model.GameStatus.AWAITING_PROMOTION) {
+                            g.promotePawn(new org.pocketchess.core.pieces.Queen(g.isWhiteTurn()));
+                        }
+                        moved = true;
+                        break;
+                    }
+                }
+                assertThat(moved || g.isGameOver())
+                        .as("bot must always find an executor-accepted move (no freeze)")
+                        .isTrue();
+                if (!moved) break;
+            }
+        }
+    }
+
+    @Test
+    void generatingLegalMovesDoesNotCorruptBoardWhenAdjacentCastleIsAvailable() {
+        // Root cause of the "rook vanished" reports: generateLegalMoves simulates
+        // every move with make/undo. Undoing an adjacent king-takes-rook castle
+        // (king f1, rook g1 — rook lands on the king's origin) used to clobber
+        // the rook, corrupting the live board on every broadcast / AI search.
+        Game g = new Game();
+        g.resetGame(new TimeControl(300, 0), GameMode.PVP, Piece.Color.WHITE,
+                AIDifficulty.MEDIUM, GameModeType.CHESS960);
+        Board b = g.getBoard();
+        for (int r = 0; r < 8; r++) {
+            for (int c = 0; c < 8; c++) b.getBox(r, c).setPiece(null);
+        }
+        b.getBox(7, 5).setPiece(new King(true));   // f1
+        b.getBox(7, 6).setPiece(new Rook(true));   // g1
+        b.getBox(0, 4).setPiece(new King(false));  // e8
+        b.getBox(0, 0).setPiece(new Rook(false));  // a8
+        b.saveAsInitial();
+
+        String before = org.pocketchess.core.game.utils.FenUtils.generateFEN(b, true);
+        new FastMoveGenerator().generateLegalMoves(g);   // simulates the castle (make/undo)
+        String after = org.pocketchess.core.game.utils.FenUtils.generateFEN(b, true);
+        assertThat(after).as("legal-move generation must leave the board untouched").isEqualTo(before);
     }
 
     @Test

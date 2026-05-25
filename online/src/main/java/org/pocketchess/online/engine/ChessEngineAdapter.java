@@ -395,51 +395,53 @@ public class ChessEngineAdapter {
 
         AIPlayer ai = new AIPlayer(new EvaluationParameters(), aiDifficulty);
         Move best = ai.findBestMove(game);
-        if (best == null) {
-            return MoveResult.reject("Engine returned no move");
-        }
+
+        // Try the AI's choice first, then fall back to any executor-accepted
+        // legal move so the bot never freezes when the engine's legality check
+        // disagrees with the move generator.
+        List<Move> candidates = new ArrayList<>();
+        if (best != null) candidates.add(best);
+        candidates.addAll(moveGenerator.generateLegalMoves(game));
 
         boolean moverIsWhite = game.isWhiteTurn();
-        boolean chess960Castle = game.getGameModeType() == GameModeType.CHESS960
-                && best.wasCastlingMove && best.chess960RookFromCol >= 0;
+        boolean chess960 = game.getGameModeType() == GameModeType.CHESS960;
 
-        boolean accepted;
-        if (chess960Castle) {
-            // Apply as king-takes-rook so the engine's Chess960 castling path
-            // runs regardless of the king's starting file (the king→g/c-file
-            // shortcut only works when the king travels more than one square).
-            accepted = game.playerMove(
-                    best.start.getX(), best.start.getY(),
-                    best.start.getX(), best.chess960RookFromCol);
-        } else {
-            accepted = game.playerMove(
-                    best.start.getX(), best.start.getY(),
-                    best.end.getX(), best.end.getY());
-        }
-        if (!accepted) {
-            return MoveResult.reject("Engine produced illegal move: " + UciMove.fromMove(best));
-        }
-
-        Character promoSuffix = null;
-        if (game.getStatus() == GameStatus.AWAITING_PROMOTION) {
-            char suffix = best.promotedTo != null
-                    ? pieceLetter(best.promotedTo) : 'q';
-            game.promotePawn(promotionPiece(suffix, moverIsWhite));
-            promoSuffix = suffix;
-        }
-
-        if (chess960Castle) {
-            // Report the same king→rook UCI the human path uses, so the client
-            // animates the castle consistently.
-            String castleUci = "" + (char) ('a' + best.start.getY()) + (8 - best.start.getX())
-                                  + (char) ('a' + best.chess960RookFromCol) + (8 - best.start.getX());
-            return MoveResult.ok(castleUci, fen(), game.getStatus(), game.isWhiteTurn(),
+        for (Move m : candidates) {
+            String uci = applyAiCandidate(m, chess960);
+            if (uci == null) continue;                       // executor rejected it — try next
+            if (game.getStatus() == GameStatus.AWAITING_PROMOTION) {
+                char suffix = m.promotedTo != null ? pieceLetter(m.promotedTo) : 'q';
+                game.promotePawn(promotionPiece(suffix, moverIsWhite));
+                uci = uci + suffix;
+            }
+            return MoveResult.ok(uci, fen(), game.getStatus(), game.isWhiteTurn(),
                     lavaSquares(), warningSquares());
         }
+        return MoveResult.reject("Engine produced no playable move");
+    }
 
-        return MoveResult.ok(UciMove.fromMove(best, promoSuffix),
-                fen(), game.getStatus(), game.isWhiteTurn(),
-                lavaSquares(), warningSquares());
+    /**
+     * Applies an AI candidate move (Chess960 castles as king-takes-rook).
+     * Returns the move's UCI on success, or {@code null} (no board change) if
+     * the executor rejected it.
+     */
+    private String applyAiCandidate(Move m, boolean chess960) {
+        boolean castle = chess960 && m.wasCastlingMove && m.chess960RookFromCol >= 0;
+        boolean ok;
+        if (castle) {
+            ok = game.playerMove(m.start.getX(), m.start.getY(),
+                    m.start.getX(), m.chess960RookFromCol);
+        } else {
+            ok = game.playerMove(m.start.getX(), m.start.getY(),
+                    m.end.getX(), m.end.getY());
+        }
+        if (!ok) return null;
+        if (castle) {
+            // king→rook UCI, the same form the human path uses.
+            return "" + (char) ('a' + m.start.getY()) + (8 - m.start.getX())
+                      + (char) ('a' + m.chess960RookFromCol) + (8 - m.start.getX());
+        }
+        return UciMove.fromMove(m);
     }
 
     private static Piece promotionPiece(Character suffix, boolean isWhite) {

@@ -213,10 +213,14 @@ public class FastMoveGenerator {
                             && !((Rook) p).hasMoved()) { ksRookCol = sc; break; }
                     if (p != null) break;
                 }
-                Move castleMove = new Move(start, ksDestSpot, piece, null, true, true,
-                        game.getBoard().getEnPassantTargetSquare(), 0, 0, 0);
-                castleMove.chess960RookFromCol = ksRookCol;
-                moves.add(castleMove);
+                // Only a real castle if there's an unmoved rook on this side —
+                // otherwise the c/g-file square is just a normal king step.
+                if (ksRookCol != -1) {
+                    Move castleMove = new Move(start, ksDestSpot, piece, null, true, true,
+                            game.getBoard().getEnPassantTargetSquare(), 0, 0, 0);
+                    castleMove.chess960RookFromCol = ksRookCol;
+                    moves.add(castleMove);
+                }
             }
         }
 
@@ -232,10 +236,12 @@ public class FastMoveGenerator {
                             && !((Rook) p).hasMoved()) { qsRookCol = sc; break; }
                     if (p != null) break;
                 }
-                Move castleMove = new Move(start, qsDestSpot, piece, null, true, true,
-                        game.getBoard().getEnPassantTargetSquare(), 0, 0, 0);
-                castleMove.chess960RookFromCol = qsRookCol;
-                moves.add(castleMove);
+                if (qsRookCol != -1) {
+                    Move castleMove = new Move(start, qsDestSpot, piece, null, true, true,
+                            game.getBoard().getEnPassantTargetSquare(), 0, 0, 0);
+                    castleMove.chess960RookFromCol = qsRookCol;
+                    moves.add(castleMove);
+                }
             }
         }
     }

@@ -28,11 +28,14 @@ public class King extends Piece {
                 (end.getY() == 6 || end.getY() == 2 ||
                         (end.getPiece() instanceof Rook && end.getPiece().isWhite() == this.isWhite()));
 
-        if (isCastlingIntent) {
-            return isCastlingMove(board, start, end);
+        if (isCastlingIntent && isCastlingMove(board, start, end)) {
+            return true;
         }
 
         // ── Normal one-square move ────────────────────────────────────────────
+        // Also the fall-back when a castling-shaped move (king to the c/g-file)
+        // has no rook to castle with — e.g. in Chess960 a king on the b-file
+        // stepping one square to c1 is a normal move, not a castle.
         if (x <= 1 && y <= 1) {
             if (end.getPiece() != null && end.getPiece().isWhite() == this.isWhite()) return false;
             return true;
