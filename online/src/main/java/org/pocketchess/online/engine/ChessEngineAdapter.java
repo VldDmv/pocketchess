@@ -318,6 +318,39 @@ public class ChessEngineAdapter {
     }
 
     /**
+     * Human-readable label for a move, used in error messages instead of the
+     * raw UCI string. Approximates SAN: "Kc3", "Nxf3", "exd5", "e8=Q", and
+     * "O-O" / "O-O-O" for a king-takes-rook castle attempt.
+     */
+    private String describeMove(UciMove m) {
+        Piece p = game.getBoard().getBox(m.fromRow(), m.fromCol()).getPiece();
+        String dest = toSquareName(m.toRow(), m.toCol());
+        if (p == null) return dest;
+        Piece target = game.getBoard().getBox(m.toRow(), m.toCol()).getPiece();
+
+        if (p instanceof King && target instanceof Rook && target.isWhite() == p.isWhite()) {
+            return m.toCol() > m.fromCol() ? "O-O" : "O-O-O";   // castle attempt
+        }
+        boolean capture = target != null && target.isWhite() != p.isWhite();
+        String promo = m.promotion() != null
+                ? "=" + Character.toUpperCase(m.promotion()) : "";
+        if (p instanceof Pawn) {
+            String fromFile = "" + (char) ('a' + m.fromCol());
+            return (capture ? fromFile + "x" : "") + dest + promo;
+        }
+        return pieceSymbol(p) + (capture ? "x" : "") + dest;
+    }
+
+    private static String pieceSymbol(Piece p) {
+        if (p instanceof King)   return "K";
+        if (p instanceof Queen)  return "Q";
+        if (p instanceof Rook)   return "R";
+        if (p instanceof Bishop) return "B";
+        if (p instanceof Knight) return "N";
+        return "";
+    }
+
+    /**
      * Applies a player move expressed in UCI long-algebraic notation.
      *
      * <p>Promotion is detected from the suffix ({@code q r b n}); if the move
@@ -339,7 +372,7 @@ public class ChessEngineAdapter {
         boolean moverIsWhite = game.isWhiteTurn();
         boolean accepted = game.playerMove(m.fromRow(), m.fromCol(), m.toRow(), m.toCol());
         if (!accepted) {
-            return MoveResult.reject("Illegal move: " + uci);
+            return MoveResult.reject("Illegal move: " + describeMove(m));
         }
 
         if (game.getStatus() == GameStatus.AWAITING_PROMOTION) {

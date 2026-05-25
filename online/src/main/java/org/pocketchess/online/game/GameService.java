@@ -256,13 +256,19 @@ public class GameService {
         s.clearDrawOffer();
         s.clearUndoRequest();
 
+        String fenBefore = s.engine().fen();
         MoveResult result = s.engine().applyMove(uci);
         if (!result.accepted()) {
+            log.info("Move rejected in {} ({}) by {}: uci={} reason=\"{}\" fen={} legal={}",
+                    s.id(), s.variant(), byName, uci, result.error(), fenBefore,
+                    s.engine().legalMoves());
             if (byName != null) sendError(s.id(), byName, result.error());
             return;
         }
         s.recordMove(result);
         s.onMoveCompleted();
+        log.debug("Move applied in {} ({}) by {}: uci={} status={} fen={}",
+                s.id(), s.variant(), byName, result.uci(), result.status(), result.fen());
 
         if (terminal(result.status())) {
             s.markFinished();

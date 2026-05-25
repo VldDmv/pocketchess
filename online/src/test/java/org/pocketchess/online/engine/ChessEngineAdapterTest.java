@@ -46,6 +46,18 @@ class ChessEngineAdapterTest {
     }
 
     @Test
+    void illegalMoveErrorUsesAlgebraicLabel() {
+        ChessEngineAdapter adapter =
+                ChessEngineAdapter.newClassicGame(FIVE_MIN, AIDifficulty.MEDIUM);
+
+        // King can't leap e1→e3; the error should read "Ke3", not "e1e3".
+        MoveResult result = adapter.applyMove("e1e3");
+
+        assertThat(result.accepted()).isFalse();
+        assertThat(result.error()).isEqualTo("Illegal move: Ke3");
+    }
+
+    @Test
     void engineReturnsLegalMoveFromInitialPosition() {
         ChessEngineAdapter adapter =
                 ChessEngineAdapter.newClassicGame(FIVE_MIN, AIDifficulty.EASY);

@@ -119,10 +119,16 @@
             const tgt = pieceOn(u.slice(2, 4), lastView.fen);
             return tgt && tgt[1] === 'R' && tgt[0] === colourPrefix;   // own rook
         });
+        const legal = lastView.legalMoves || [];
         for (const u of castleUcis) {
             const rookSq = u.slice(2, 4);
+            // Dropping the king onto its own rook is always an unambiguous castle.
+            if (to === rookSq) return rookSq;
+            // Dropping on the castled square (c/g-file) only castles when a plain
+            // one-square king step there isn't itself a legal move — otherwise the
+            // player just wanted to move the king, not castle.
             const kingDestSq = (rookSq.charCodeAt(0) > kingFile ? 'g' : 'c') + rank;
-            if (to === rookSq || to === kingDestSq) return rookSq;
+            if (to === kingDestSq && !legal.includes(from + to)) return rookSq;
         }
         return to;
     }
