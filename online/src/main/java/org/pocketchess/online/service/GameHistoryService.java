@@ -57,9 +57,10 @@ public class GameHistoryService {
         int whiteBefore = white.getRating(category);
         int blackBefore = black.getRating(category);
         int[] after = elo.apply(whiteBefore, blackBefore, whiteScore);
-        // Berserk bonus: +1 if the berserker won outright. Matches lichess.
-        if (session.whiteBerserked() && whiteScore == 1.0) after[0] += 1;
-        if (session.blackBerserked() && whiteScore == 0.0) after[1] += 1;
+        // Berserk reward: a berserker who wins outright keeps an extra 50% of
+        // the rating gained from the win (rounded down) — e.g. +16 → +24, +3 → +4.
+        if (session.whiteBerserked() && whiteScore == 1.0) after[0] += (after[0] - whiteBefore) / 2;
+        if (session.blackBerserked() && whiteScore == 0.0) after[1] += (after[1] - blackBefore) / 2;
         white.setRating(category, after[0]);
         black.setRating(category, after[1]);
 

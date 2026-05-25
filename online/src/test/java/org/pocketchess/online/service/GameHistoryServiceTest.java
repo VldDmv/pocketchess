@@ -86,6 +86,26 @@ class GameHistoryServiceTest {
     }
 
     @Test
+    void berserkWinnerKeepsHalfAgainOfTheRatingGain() {
+        newUser("ann", 1200);
+        newUser("ben", 1200);
+
+        GameRegistry reg = new GameRegistry();
+        GameService svc = new GameService(reg, mock(SimpMessagingTemplate.class), history, users);
+        GameSession s = svc.createOpen("ann", true,
+                new TimeControl(300, 0), GameModeType.CLASSIC);
+        svc.join(s, "ben");
+        svc.requestBerserk(s.id(), "ann");          // white berserks before moving
+        svc.applyMove(s.id(), "ann", "e2e4");
+        svc.applyMove(s.id(), "ben", "e7e5");
+        svc.resign(s.id(), "ben");                  // black resigns → white wins
+
+        // A normal win at 1200/1200 is +16; berserk adds 50% (rounded down) → +24.
+        assertThat(users.findByDisplayName("ann").orElseThrow().getRating("BLITZ")).isEqualTo(1224);
+        assertThat(users.findByDisplayName("ben").orElseThrow().getRating("BLITZ")).isEqualTo(1184);
+    }
+
+    @Test
     void pveGameIsNotRated() {
         User human = newUser("eve", 1400);
         GameRegistry reg = new GameRegistry();
