@@ -43,7 +43,7 @@ public class King extends Piece {
         return false;
     }
 
-    private boolean isCastlingMove(Board board, Spot start, Spot end) {
+    public boolean isCastlingMove(Board board, Spot start, Spot end) {
         if (this.hasMoved) return false;
 
         int kingDest;

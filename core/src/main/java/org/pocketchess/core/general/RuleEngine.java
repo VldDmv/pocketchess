@@ -125,7 +125,10 @@ public class RuleEngine implements ChessRules {
             }
         }
 
-        return king.canMove(board, start, end);
+        // Use the STRICT castling check, not King.canMove — the latter falls
+        // back to a normal one-square step, which would wrongly accept a castle
+        // whose rook destination is blocked (the king still steps one square).
+        return king instanceof King && ((King) king).isCastlingMove(board, start, end);
     }
 
     private boolean hasAnyLegalMove(Board board, Spot startSpot) {
