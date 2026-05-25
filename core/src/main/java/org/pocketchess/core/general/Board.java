@@ -94,11 +94,17 @@ public class Board {
 
     /** Deep-copy constructor (used by AI game copies). */
     public Board(Board other) {
-        this.enPassantTargetSquare = other.enPassantTargetSquare;
         this.boxes = new Spot[8][8];
         for (int r = 0; r < 8; r++)
             for (int c = 0; c < 8; c++)
                 this.boxes[r][c] = new Spot(other.boxes[r][c]);
+        // Map the en-passant target onto THIS board's Spot, not the source
+        // board's — otherwise `end == enPassantTargetSquare` is never true on a
+        // copy and en passant silently disappears (notably in AI search copies).
+        Spot otherEp = other.enPassantTargetSquare;
+        this.enPassantTargetSquare = (otherEp == null)
+                ? null
+                : this.boxes[otherEp.getX()][otherEp.getY()];
         // Copy the initial snapshot too so that AI copies can navigate history
         if (other.initialBoxes != null) {
             this.initialBoxes = new Spot[8][8];
