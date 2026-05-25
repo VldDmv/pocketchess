@@ -100,9 +100,29 @@ class GameHistoryServiceTest {
         svc.applyMove(s.id(), "ben", "e7e5");
         svc.resign(s.id(), "ben");                  // black resigns → white wins
 
-        // A normal win at 1200/1200 is +16; berserk adds 50% (rounded down) → +24.
+        // A normal win at 1200/1200 is +16; blitz berserk adds 50% → +24.
         assertThat(users.findByDisplayName("ann").orElseThrow().getRating("BLITZ")).isEqualTo(1224);
         assertThat(users.findByDisplayName("ben").orElseThrow().getRating("BLITZ")).isEqualTo(1184);
+    }
+
+    @Test
+    void berserkBonusIsSmallerInBullet() {
+        newUser("ula", 1200);
+        newUser("ugo", 1200);
+
+        GameRegistry reg = new GameRegistry();
+        GameService svc = new GameService(reg, mock(SimpMessagingTemplate.class), history, users);
+        GameSession s = svc.createOpen("ula", true,
+                new TimeControl(60, 0), GameModeType.CLASSIC);   // 1 min = bullet
+        svc.join(s, "ugo");
+        svc.requestBerserk(s.id(), "ula");
+        svc.applyMove(s.id(), "ula", "e2e4");
+        svc.applyMove(s.id(), "ugo", "e7e5");
+        svc.resign(s.id(), "ugo");                               // white wins
+
+        // A normal win is +16; bullet berserk adds only 25% → +20.
+        assertThat(users.findByDisplayName("ula").orElseThrow().getRating("BULLET")).isEqualTo(1220);
+        assertThat(users.findByDisplayName("ugo").orElseThrow().getRating("BULLET")).isEqualTo(1184);
     }
 
     @Test

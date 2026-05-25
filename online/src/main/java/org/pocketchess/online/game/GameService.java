@@ -267,8 +267,8 @@ public class GameService {
         }
         s.recordMove(result);
         s.onMoveCompleted();
-        log.debug("Move applied in {} ({}) by {}: uci={} status={} fen={}",
-                s.id(), s.variant(), byName, result.uci(), result.status(), result.fen());
+        log.info("Move applied in {} ({}) by {}: uci={} status={} fenBefore={} fenAfter={}",
+                s.id(), s.variant(), byName, result.uci(), result.status(), fenBefore, result.fen());
 
         if (terminal(result.status())) {
             s.markFinished();
@@ -336,8 +336,8 @@ public class GameService {
         }
         long estimated = s.timeControl().baseTimeSeconds()
                 + 40L * Math.max(0, s.timeControl().incrementSeconds());
-        if (estimated > 600) {
-            sendError(gameId, byName, "Berserk only available for games up to 10 min.");
+        if (estimated >= 600) {
+            sendError(gameId, byName, "Berserk only available for games under 10 min.");
             return;
         }
         boolean isWhite = s.white() != null && byName.equals(s.white().name());

@@ -486,8 +486,8 @@
         const abortBtn = document.getElementById('btn-abort');
         abortBtn.style.display = canAbort ? '' : 'none';
 
-        // Berserk: halve your starting clock for a +1 Elo bonus on win.
-        // Allowed only before YOUR first move, on short time controls, PvP.
+        // Berserk: halve your starting clock (increment stays) for a bigger
+        // rating gain on win. Allowed only before YOUR first move, under 10 min, PvP.
         const meIsWhite = myColour === 'white';
         const myMoves = meIsWhite
                 ? Math.ceil(view.moveHistory.length / 2)
@@ -495,7 +495,7 @@
         const alreadyBerserked = meIsWhite ? view.whiteBerserked : view.blackBerserked;
         const estTime = view.unlimitedTime ? 999999
                 : ((view.whiteMillisLeft + view.blackMillisLeft) / 2000);  // rough fallback
-        const tcLengthOk = !view.unlimitedTime && estTime <= 700;
+        const tcLengthOk = !view.unlimitedTime && estTime < 600;
         const canBerserk = iAmInGame && !finished && myMoves === 0 && !oppIsBot
                 && !alreadyBerserked && tcLengthOk;
         const berserkBtn = document.getElementById('btn-berserk');
@@ -798,7 +798,8 @@
         if (confirm('Abort this game? No rating change.')) send('abort');
     };
     document.getElementById('btn-berserk').onclick = () => {
-        if (confirm('Berserk? Halves your clock for +1 rating on win.')) send('berserk');
+        if (confirm('Berserk? Halves your clock (increment stays) for a bigger rating gain if you win '
+                + '— +50% in blitz/rapid, +25% in bullet.')) send('berserk');
     };
     document.getElementById('btn-draw').onclick = () => send('draw/offer');
     document.getElementById('btn-undo').onclick = () => send('undo/request');

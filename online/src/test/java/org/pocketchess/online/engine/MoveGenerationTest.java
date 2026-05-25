@@ -96,6 +96,50 @@ class MoveGenerationTest {
     }
 
     @Test
+    void chess960StartAlwaysHasBothRooksWithKingBetween() {
+        for (int i = 0; i < 400; i++) {
+            ChessEngineAdapter a = ChessEngineAdapter.newGame(
+                    new TimeControl(300, 0), AIDifficulty.MEDIUM, GameModeType.CHESS960);
+            String rank1 = a.fen().split(" ")[0].split("/")[7];   // white back rank
+            StringBuilder expanded = new StringBuilder();
+            for (char ch : rank1.toCharArray()) {
+                if (Character.isDigit(ch)) for (int k = 0; k < ch - '0'; k++) expanded.append('.');
+                else expanded.append(ch);
+            }
+            String row = expanded.toString();
+            long rooks = row.chars().filter(c -> c == 'R').count();
+            int firstR = row.indexOf('R'), lastR = row.lastIndexOf('R'), king = row.indexOf('K');
+            assertThat(rooks).as("white has two rooks at start: %s", row).isEqualTo(2);
+            assertThat(king).as("king between the rooks: %s", row)
+                    .isGreaterThan(firstR).isLessThan(lastR);
+        }
+    }
+
+    @Test
+    void chess960KingsideCastleWhereKingAndRookSwap() {
+        // King f1, rook g1 — kingside castle ends with king g1, rook f1, i.e.
+        // they effectively swap. The rook must survive (reported: it vanished).
+        Game g = new Game();
+        g.resetGame(new TimeControl(300, 0), GameMode.PVP, Piece.Color.WHITE,
+                AIDifficulty.MEDIUM, GameModeType.CHESS960);
+
+        Board b = g.getBoard();
+        for (int r = 0; r < 8; r++) {
+            for (int c = 0; c < 8; c++) b.getBox(r, c).setPiece(null);
+        }
+        b.getBox(7, 5).setPiece(new King(true));   // f1
+        b.getBox(7, 6).setPiece(new Rook(true));   // g1
+        b.getBox(0, 4).setPiece(new King(false));  // e8 (away from the g-file)
+        b.getBox(0, 0).setPiece(new Rook(false));  // a8 (doesn't attack f1/g1)
+        b.saveAsInitial();
+
+        boolean ok = g.playerMove(7, 5, 7, 6);     // king takes rook (g1)
+        assertThat(ok).as("king-takes-rook castle is accepted").isTrue();
+        assertThat(b.getBox(7, 6).getPiece()).as("king lands on g1").isInstanceOf(King.class);
+        assertThat(b.getBox(7, 5).getPiece()).as("rook lands on f1 (must not vanish)").isInstanceOf(Rook.class);
+    }
+
+    @Test
     void lavaStrictGenerationIsNoStricterThanExactRules() {
         // In a fresh lava game two central squares are flagged as WARNING.
         // The AI generator avoids them; the exact-rules generator does not,

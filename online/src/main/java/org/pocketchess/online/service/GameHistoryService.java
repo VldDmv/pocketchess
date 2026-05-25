@@ -4,6 +4,7 @@ import org.pocketchess.core.game.model.GameStatus;
 import org.pocketchess.online.domain.GameRecord;
 import org.pocketchess.online.domain.User;
 import org.pocketchess.online.game.GameSession;
+import org.pocketchess.online.lobby.LobbyEntry;
 import org.pocketchess.online.repo.GameRecordRepository;
 import org.pocketchess.online.repo.UserRepository;
 import org.slf4j.Logger;
@@ -57,10 +58,17 @@ public class GameHistoryService {
         int whiteBefore = white.getRating(category);
         int blackBefore = black.getRating(category);
         int[] after = elo.apply(whiteBefore, blackBefore, whiteScore);
-        // Berserk reward: a berserker who wins outright keeps an extra 50% of
-        // the rating gained from the win (rounded down) — e.g. +16 → +24, +3 → +4.
-        if (session.whiteBerserked() && whiteScore == 1.0) after[0] += (after[0] - whiteBefore) / 2;
-        if (session.blackBerserked() && whiteScore == 0.0) after[1] += (after[1] - blackBefore) / 2;
+        // Berserk reward: a berserker who wins outright keeps an extra slice of
+        // the rating gained from the win (rounded down). Bullet/ultrabullet give
+        // +25%, blitz and slower +50% — e.g. blitz +16 → +24, bullet +16 → +20.
+        String timeBucket = LobbyEntry.categorise(
+                session.timeControl().baseTimeSeconds(),
+                session.timeControl().incrementSeconds(),
+                session.timeControl().isUnlimited());
+        double berserkPct = (timeBucket.equals("BULLET") || timeBucket.equals("ULTRABULLET"))
+                ? 0.25 : 0.5;
+        if (session.whiteBerserked() && whiteScore == 1.0) after[0] += (int) ((after[0] - whiteBefore) * berserkPct);
+        if (session.blackBerserked() && whiteScore == 0.0) after[1] += (int) ((after[1] - blackBefore) * berserkPct);
         white.setRating(category, after[0]);
         black.setRating(category, after[1]);
 
