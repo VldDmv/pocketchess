@@ -15,7 +15,7 @@ import static org.mockito.Mockito.mock;
 class LobbyServiceTest {
 
     @Test
-    void categorisesByLichessFormula() {
+    void categorisesByEstimatedDuration() {
         // estimated = base + 40 * increment
         assertThat(LobbyEntry.categorise(15,   0, false)).isEqualTo("ULTRABULLET"); // 15
         assertThat(LobbyEntry.categorise(29,   0, false)).isEqualTo("ULTRABULLET"); // 29
