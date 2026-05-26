@@ -88,7 +88,7 @@ class PerftTest {
      * Plays {@code games} random games of up to {@code maxPlies}, and at every
      * position asserts that {@code makeTemporaryMove} followed by
      * {@code undoTemporaryMove} restores the exact position for EVERY legal
-     * move. This is the invariant the Chess960 castling bug violated.
+     * move — so search and legal-move generation never leave the board altered.
      */
     private void assertMakeUndoIsIdentity(GameModeType variant, int games, int maxPlies) {
         Random rnd = new Random(20260525L);

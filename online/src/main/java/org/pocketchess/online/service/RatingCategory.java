@@ -7,7 +7,7 @@ import org.pocketchess.online.lobby.LobbyEntry;
 /**
  * Maps a (variant, time control) pair to the rating bucket it counts toward.
  * Variants get their own pooled rating; standard chess is split by time
- * control, lichess-style.
+ * control.
  */
 public final class RatingCategory {
 

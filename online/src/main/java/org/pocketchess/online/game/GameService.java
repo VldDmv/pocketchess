@@ -388,7 +388,7 @@ public class GameService {
     /**
      * Voluntary abort — allowed while the game is active and fewer than
      * two plies have been played. After move 2 the game is "in progress"
-     * and the only ways out are resign / draw / clock. Mirrors lichess.
+     * and the only ways out are resign / draw / clock.
      */
     public void requestAbort(String gameId, String byName) {
         withGame(gameId, s -> {
@@ -576,7 +576,7 @@ public class GameService {
             if (s.rematchOfferBy() == null) return;
             if (s.playerByName(byName) == null) return;     // not in this game
             // Either side may clear the offer — the opponent declines it, the
-            // offerer cancels it. (Previously this returned for the offerer.)
+            // offerer cancels it.
             s.clearRematchOffer();
             broadcast(s, null, null);
         });
@@ -756,8 +756,8 @@ public class GameService {
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    //  Abort timer — lichess-style: white must move first within 30s; once
-    //  white has moved, black has 15s to respond. PvE games never abort.
+    //  Abort timer — white must move first within 30s; once white has moved,
+    //  black has 15s to respond. PvE games never abort.
     // ─────────────────────────────────────────────────────────────────────
 
     private void rearmAbortTimer(GameSession s) {

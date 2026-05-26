@@ -62,9 +62,9 @@
         window.location.href = '/game/' + encodeURIComponent(gameId);
     }
 
-    // Buttons are type="button" so the form can't submit natively while the
-    // listener is still attaching — that used to GET-navigate to a URL with
-    // form data in the query string before the JS handler bound.
+    // Buttons are type="button" so the form can't submit natively before the
+    // JS click handler binds (which would GET-navigate with form data in the
+    // query string instead of POSTing the JSON request).
     document.getElementById('bot-start')?.addEventListener('click', async () => {
         try {
             const r = await postJson('/api/play/bot',

@@ -155,7 +155,7 @@
     }
 
     // ─────────────────────────────────────────────────────────────────────
-    //  Promotion picker (inline, lichess-style)
+    //  Promotion picker (inline)
     // ─────────────────────────────────────────────────────────────────────
 
     function openPromotionPicker(targetSquare, whitePromotion) {

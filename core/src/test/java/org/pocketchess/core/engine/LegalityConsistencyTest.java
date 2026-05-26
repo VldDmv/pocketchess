@@ -22,10 +22,10 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>The engine has two independent legality checks: the generator filters with
  * {@code makeTemporaryMove + isKingInCheck}, while the executor uses
  * {@code RuleEngine.isMoveLegal}. If they diverge, the AI (and any UI) can pick
- * a move the executor then rejects — which froze the bot. This test asserts the
- * critical direction: every move the generator reports as legal is accepted by
- * the executor, applied exactly the way the services apply it (Chess960 castles
- * as king-takes-rook).
+ * a move the executor then rejects. This test asserts the critical direction:
+ * every move the generator reports as legal is accepted by the executor,
+ * applied exactly the way the services apply it (Chess960 castles as
+ * king-takes-rook).
  */
 class LegalityConsistencyTest {
 

@@ -27,8 +27,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * count drops to zero even though the user is still on the site. Without
  * debounce that would flap "Opponent disconnected — 120s to reconnect"
  * at the opponent every time someone clicked a link. The grace window
- * we wait before firing {@code onPlayerDisconnected} smooths that out,
- * matching how lichess and chess.com treat site-wide presence.
+ * we wait before firing {@code onPlayerDisconnected} smooths that out.
  */
 @Component
 public class PresenceTracker {

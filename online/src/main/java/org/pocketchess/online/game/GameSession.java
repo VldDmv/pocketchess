@@ -50,8 +50,8 @@ public class GameSession {
 
     /**
      * Reference time used to decrement the active side's clock. The clock
-     * stays frozen at its initial value until the first move is played
-     * (lichess-style — gives both sides a moment to settle).
+     * stays at its initial value until the first move is played, giving both
+     * sides a moment to settle.
      */
     private long turnStartMillis;
     private long whiteMillisLeft;

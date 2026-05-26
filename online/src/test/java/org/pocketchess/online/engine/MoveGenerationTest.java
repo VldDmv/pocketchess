@@ -61,9 +61,9 @@ class MoveGenerationTest {
 
     @Test
     void chess960QueensideCastleFromBFileGeneratesAndExecutes() {
-        // Reproduces the reported bug: king on the b-file castling queenside
-        // (king b1 → c1, rook a1 → d1). The king travels only ONE square, so
-        // it must be expressed as king-takes-rook, never king→c-file.
+        // King on the b-file castling queenside (king b1 → c1, rook a1 → d1).
+        // The king travels only ONE square, so the castle must be expressed as
+        // king-takes-rook, never king→c-file.
         Game g = new Game();
         g.resetGame(new TimeControl(300, 0), GameMode.PVP, Piece.Color.WHITE,
                 AIDifficulty.MEDIUM, GameModeType.CHESS960);
@@ -126,11 +126,10 @@ class MoveGenerationTest {
         }
         String r = row.toString();
         long rooks = r.chars().filter(c -> Character.toLowerCase(c) == 'r').count();
-        // The corruption symptom was a vanishing rook. No captures are possible
-        // this early (start → e4 → one reply), so both back ranks must still
-        // hold their two rooks. (King-between-rooks only holds at the very start
-        // and is covered by the dedicated setup tests, not here — a king or rook
-        // may legitimately step out of formation after a move.)
+        // No captures are possible this early (start → e4 → one reply), so both
+        // back ranks must still hold their two rooks. (King-between-rooks only
+        // holds at the very start and is covered by the dedicated setup tests,
+        // not here — a king or rook may step out of formation after a move.)
         assertThat(rooks).as("two rooks on %s rank (%s)", when, r).isEqualTo(2);
     }
 
@@ -205,7 +204,7 @@ class MoveGenerationTest {
     @Test
     void chess960KingsideCastleWhereKingAndRookSwap() {
         // King f1, rook g1 — kingside castle ends with king g1, rook f1, i.e.
-        // they effectively swap. The rook must survive (reported: it vanished).
+        // they effectively swap. The rook must survive the swap.
         Game g = new Game();
         g.resetGame(new TimeControl(300, 0), GameMode.PVP, Piece.Color.WHITE,
                 AIDifficulty.MEDIUM, GameModeType.CHESS960);
@@ -228,11 +227,10 @@ class MoveGenerationTest {
 
     @Test
     void chess960AiNeverFreezesApplyingItsOwnMove() {
-        // Reproduces the desktop "AI won't move" freeze: when the bot's best move
-        // is a castle, AIMoveService applies it as king-takes-rook. If that ever
-        // returns false the desktop would hang on the AI's turn. Play full
-        // AI-vs-AI Chess960 games applying moves exactly as AIMoveService does
-        // and assert every AI move is accepted.
+        // The bot must always be able to apply its chosen move (otherwise its
+        // turn would hang). Play full AI-vs-AI Chess960 games applying moves
+        // exactly as AIMoveService does — castles as king-takes-rook — and
+        // assert every AI move is accepted.
         for (int gameNo = 0; gameNo < 12; gameNo++) {
             Game g = new Game();
             g.resetGame(new TimeControl(300, 0), GameMode.PVP, Piece.Color.WHITE,
@@ -271,10 +269,10 @@ class MoveGenerationTest {
 
     @Test
     void generatingLegalMovesDoesNotCorruptBoardWhenAdjacentCastleIsAvailable() {
-        // Root cause of the "rook vanished" reports: generateLegalMoves simulates
-        // every move with make/undo. Undoing an adjacent king-takes-rook castle
-        // (king f1, rook g1 — rook lands on the king's origin) used to clobber
-        // the rook, corrupting the live board on every broadcast / AI search.
+        // generateLegalMoves simulates every move with make/undo. Undoing an
+        // adjacent king-takes-rook castle (king f1, rook g1 — the rook lands on
+        // the king's origin) must restore both pieces, leaving the board exactly
+        // as it was — legal-move generation must never mutate the live board.
         Game g = new Game();
         g.resetGame(new TimeControl(300, 0), GameMode.PVP, Piece.Color.WHITE,
                 AIDifficulty.MEDIUM, GameModeType.CHESS960);
@@ -297,7 +295,7 @@ class MoveGenerationTest {
     @Test
     void chess960QueensideCastleWhereKingAndRookSwap() {
         // King d1, rook c1 — queenside castle ends with king c1, rook d1 (they
-        // swap). This is the exact shape of the reported "rook vanished" FEN.
+        // swap), the mirror of the kingside adjacent-swap case. Rook must survive.
         Game g = new Game();
         g.resetGame(new TimeControl(300, 0), GameMode.PVP, Piece.Color.WHITE,
                 AIDifficulty.MEDIUM, GameModeType.CHESS960);

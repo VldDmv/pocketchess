@@ -397,8 +397,8 @@ public class ChessEngineAdapter {
         Move best = ai.findBestMove(game);
 
         // Try the AI's choice first, then fall back to any executor-accepted
-        // legal move so the bot never freezes when the engine's legality check
-        // disagrees with the move generator.
+        // legal move, so the bot always has a move to play even if its top
+        // choice is rejected by the executor.
         List<Move> candidates = new ArrayList<>();
         if (best != null) candidates.add(best);
         candidates.addAll(moveGenerator.generateLegalMoves(game));

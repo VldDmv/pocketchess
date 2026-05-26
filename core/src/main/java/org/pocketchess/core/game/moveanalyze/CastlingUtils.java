@@ -6,10 +6,8 @@ import org.pocketchess.core.pieces.Piece;
 import org.pocketchess.core.pieces.Rook;
 
 /**
- * Shared castling helpers used by GameMoveExecutor and TemporaryMoveHandler.
- *
- * Centralising here removes the duplicated findCastlingRookCol that previously
- * lived in both classes and was fixed independently (causing drift).
+ * Shared castling helpers used by GameMoveExecutor and TemporaryMoveHandler, so
+ * both derive the rook's column and destination from a single definition.
  */
 public final class CastlingUtils {
 

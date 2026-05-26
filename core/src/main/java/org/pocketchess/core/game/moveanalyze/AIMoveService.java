@@ -80,10 +80,9 @@ public class AIMoveService {
 
         Move applied = tryApply(bestMove);
         if (applied == null) {
-            // The engine's legality check occasionally disagrees with the move
-            // generator (e.g. a Chess960 king step, or a check-detection edge
-            // case). Rather than freeze on the bot's turn, play the first move
-            // the executor actually accepts.
+            // If the executor rejects the chosen move (a rare disagreement with
+            // the move generator), fall back to the first move it does accept,
+            // so the bot always has a reply on its turn.
             for (Move alt : new org.pocketchess.core.ai.search.FastMoveGenerator()
                     .generateLegalMoves(game)) {
                 applied = tryApply(alt);

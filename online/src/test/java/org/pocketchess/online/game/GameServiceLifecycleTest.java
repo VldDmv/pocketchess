@@ -215,7 +215,7 @@ class GameServiceLifecycleTest {
         service.offerRematch(s.id(), "alice");
         assertThat(s.rematchOfferBy()).isEqualTo("alice");
 
-        // Offerer hits "Cancel offer" — used to be ignored due to a stray guard.
+        // The offerer can clear their own pending offer with "Cancel offer".
         service.declineRematch(s.id(), "alice");
         assertThat(s.rematchOfferBy()).isNull();
     }
@@ -469,10 +469,10 @@ class GameServiceLifecycleTest {
 
     @Test
     void pgnImportAcceptsChess960CastlingNotation() {
-        // The reported failure: a Chess960 game where the white king starts on
-        // the b-file and castles queenside ("24. O-O-O"). The SAN matcher used
-        // to mislabel that castle "O-O" (because c-file is right of b-file),
-        // throwing "Invalid SAN move: O-O-O" on import.
+        // A Chess960 game where the white king starts on the b-file and castles
+        // queenside ("24. O-O-O"). The SAN matcher must label that castle
+        // "O-O-O" even though the c-file destination is to the right of the
+        // king, and import must replay it.
         String pgn = """
                 [Event "PocketChess Game"]
                 [Variant "Chess960"]

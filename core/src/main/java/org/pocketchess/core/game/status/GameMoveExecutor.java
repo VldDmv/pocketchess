@@ -120,13 +120,11 @@ public class GameMoveExecutor {
             executeCastlingAtomic(startSpot.getX(), replayKingOrigCol,
                     replayKingDestCol, sourcePiece);
         } else {
-            // ── FIX: move the piece first, THEN apply promotion ───────────────
-            // Previously: promotedTo was set BEFORE sourcePiece was placed,
-            // then endSpot.setPiece(sourcePiece) overwrote the queen with the pawn.
+            // Place the piece on its destination first, then swap in the
+            // promotion piece so it isn't overwritten by the moved pawn.
             endSpot.setPiece(sourcePiece);
             startSpot.setPiece(null);
 
-            // Apply promotion AFTER placing the pawn on the destination square.
             if (move.promotedTo != null) {
                 endSpot.setPiece(move.promotedTo);
             }

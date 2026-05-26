@@ -13,7 +13,7 @@ public record LobbyEntry(
 ) {
 
     /**
-     * Lichess-style time-control bucketing: the "estimated duration" is
+     * Time-control bucketing by "estimated duration"
      * {@code base + 40 * increment} (40 ≈ moves in an average chess game).
      * Brackets:
      * <ul>

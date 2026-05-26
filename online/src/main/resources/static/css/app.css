@@ -284,8 +284,8 @@ table.games td a.btn { display: inline-block; padding: 6px 10px; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .actions .sound-btn { margin-left: auto; min-width: 38px; padding: 7px 10px; font-size: 16px; }
 
-/* Icon-button row (lichess-style). Each button is a square with a single
-   glyph; the tooltip explains it on hover. Keeps the action bar compact. */
+/* Icon-button row. Each button is a square with a single glyph; the tooltip
+   explains it on hover. Keeps the action bar compact. */
 .actions-icons .icon-btn {
     min-width: 40px;
     height: 40px;
@@ -392,7 +392,7 @@ table.games td a.btn { display: inline-block; padding: 6px 10px; }
     pointer-events: none;
 }
 
-/* In-board promotion picker, lichess-style. */
+/* In-board promotion picker. */
 .promo-picker {
     position: absolute;
     background: var(--panel);
